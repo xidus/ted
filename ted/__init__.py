@@ -45,13 +45,16 @@ class Environment(object):
 
         self.paths = doc['paths']
         self.files = {}
-        for file_key in doc['files']:
-            file_info = doc['files'][file_key]
-            base_key = file_info.get('base')
-            base = self.paths[base_key] if base_key is not None else ''
-            subdirs = file_info['subdirs'] if file_info.get('subdirs') is not None else ['']
-            fname = file_info['fname']
-            self.files[file_key] = os.path.join(*([base] + subdirs + [fname]))
+        # for file_key, file_info in doc['files'].iteritems():
+        #     fname = file_info.get('fname')
+        #     if fname is None:
+        #         continue
+        #     base = file_info.get('base', '')
+        #     subdirs = file_info.get('subdirs', [''])
+        #     path_parts = [base] + subdirs + [fname]
+        #     self.files[file_key] = os.path.join(*path_parts)
+        for file_key, path_list in doc['files'].iteritems():
+            self.files[file_key] = os.path.join(*path_list)
 
             # This does not work for file paths that are defined for files that have yet to be created.
             # # Check if file exists
@@ -63,6 +66,7 @@ class Environment(object):
 
     # def dict2attr(self):
     #     pass
+
 
 # Initialise
 env = Environment()
