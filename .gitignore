@@ -1,0 +1,50 @@
+# Files ignored by git!
+# bin/
+# data/
+# Makefile.setup
+archive/
+
+*.png
+
+# VIM
+*.vim
+
+# Text Mate
+*.tm_properties
+
+*.html
+
+# Python
+*.npy
+*.pyc
+
+# LaTeX
+*.aux
+*.toc
+*.tdo
+*.log
+*.lof
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.lox
+
+
+*.zip
+
+# ??
+*.thm
+*.snm
+*.nav
+
+*.out
+*.o
+*.sw*
+
+*.pdf
+
+*~
+
+.gitconfig
