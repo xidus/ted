@@ -62,12 +62,12 @@ class Environment(object):
             self.files[file_key] = os.path.join(*path_list)
 
 
-# Initialise
-env = Environment()
-
-
 if __name__ == '__main__':
     from pprint import pprint
+
+    # Initialise
+    env = Environment()
+
     pprint(env.paths)
     print ''
     pprint(env.files)
