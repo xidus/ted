@@ -1,0 +1,29 @@
+# Files ignored by git!
+# .gitignore
+.gitconfig
+
+archive/
+ted/env.yaml
+
+*.html
+
+# Python
+*.npy
+*.pyc
+
+*.zip
+
+# ??
+*.thm
+*.snm
+*.nav
+
+*.out
+*.o
+*.sw*
+
+*.png
+*.pdf
+
+*~
+
