@@ -45,16 +45,3 @@ def ra2deg(ra):
     hours, minutes, seconds = [float(s) for s in ra.split(':')]
     return hours * 15. + sgn * (minutes / 4. + seconds / 240.)
 
-
-def mjd2date(mjd):
-    """Converts *Modified* Julian Date (MJD) to Common-Era (CE) Python datetime object."""
-    import datetime as dt
-    # Smithsonian Date
-    mjd_epoch = dt.datetime(1858, 11, 17, 0, 0, 0)
-    if not isinstance(mjd, float):
-        # Assume mjd is iterable
-        return [mjd_epoch + dt.timedelta(days=nfracdays) for nfracdays in mjd]
-    else:
-        # Return a single datetime object
-        return mjd_epoch + dt.timedelta(days=mjd)
-
