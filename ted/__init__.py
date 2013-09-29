@@ -55,10 +55,11 @@ class Environment(object):
         except:
             raise EnvironmentLoadError('Path-configuration file could not load ...')
 
-        self.paths = doc['paths']
+        self.paths = doc.get('paths', None)
+        self.fstrings = doc.get('fstrings', None)
 
         self.files = {}
-        for file_key, path_list in doc['files'].iteritems():
+        for file_key, path_list in doc.get('files').iteritems():
             self.files[file_key] = os.path.join(*path_list)
 
 
