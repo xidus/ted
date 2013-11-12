@@ -50,6 +50,12 @@ from .. import env
 _path_data = env.paths['data']
 
 
+def URI_exists(uri):
+    # import requests
+    response = requests.head(uri)
+    return response.status_code in (200, 302)
+
+
 def DAS_create_download_URIs():
     """Returns a list/np.array of desired URIs."""
     pass
