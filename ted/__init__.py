@@ -62,6 +62,8 @@ class Environment(object):
             for env_type_key, env_type_list in doc.get(env_type).iteritems():
                 getattr(self, env_type)[env_type_key] = os.path.join(*env_type_list)
 
+        # Add the formatstrings...
+        self.formatstrings = doc.get('formatstrings')
 
 # Initialise
 env = Environment()
