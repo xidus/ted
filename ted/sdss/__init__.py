@@ -28,11 +28,10 @@ import os
 import sys
 import time
 
-if 'threading' in sys.modules:
-    raise Exception('threading module loaded before patching!')
-    # print '\030[1;31mthreading module loaded before patching!\030[0m'
-import gevent.monkey
-gevent.monkey.patch_all()
+# if 'threading' in sys.modules:
+#     raise Exception('threading module loaded before patching!')
+#import gevent.monkey
+#gevent.monkey.patch_all()
 from gevent.pool import Pool
 
 import requests
@@ -42,12 +41,14 @@ import pandas as pd
 # from IPython import embed
 
 from .. import env
-# from ..parse import (
-#     dec2deg,
-#     ra2deg,
-# )
 
-_path_data = env.paths['data']
+_path_data = env.paths.get('data')
+_path_das = env.paths.get('das')
+_path_cas = env.paths.get('cas')
+
+
+def iscoadded(run):
+    return run in (106, 206)
 
 
 def URI_exists(uri):
@@ -80,11 +81,6 @@ def DAS_export_fpC_URIs():
     Estimate the time for downloading the files in serial.
 
     """
-
-    # global (
-    #     _path_data
-    #     _path_data
-    # )
 
     import glob
 
@@ -460,18 +456,16 @@ def load_SNe():
 
     Column titles:
     --------------
-
-    * SDSS SN Id : string
-    * Type : string
-    * IAUC Name : string
-    * Right Ascension (hh:mm:ss) : float
-    * Declination(dd:mm:ss) : float
-    * Redshift : float
-    * Peak MJD (approx) : float
+    SDSS SN Id : string
+    Type : string
+    IAUC Name : string
+    Right Ascension (hh:mm:ss) : float
+    Declination(dd:mm:ss) : float
+    Redshift : float
+    Peak MJD (approx) : float
 
     Returns
     -------
-
     pd.DataFrame object with the SNe
 
     """
@@ -546,4 +540,77 @@ def SDSS_get_snlist():
         #     ifname, sep=';', converters=dict(Ra=ra2deg, Dec=dec2deg)
         # )
 
+
+from . import env
+
+
+def frame_path(df_entry, frame_fmt='fpC', which='local', filt_ix=2):
+    """Returns the path of the given image."""
+    keys = ('run', 'rerun', 'camcol', 'field')
+    filters = 'ugriz'
+    fstr_frame = env.fstrings.get('fpC', None)
+
+    if which == 'local':
+        base_prefix = env.paths.get(frame_fmt)
+
+    else:
+        base_prefix = 'http://das.sdss.org'
+
+    string_params = {key: df_entry[key].values[0] for key in keys}
+
+    if iscoadded(string_params['run']):
+        # Fix the value for the URI
+        string_params['run'] = (string_params['run'] - 6) * 1000 + 6
+
+    # Manually
+    string_params['filt'] = filters[filt_ix]
+
+    # for key, val in string_params.iteritems():
+    #     print key, val, type(val)
+
+    fname = fstr_frame.format(**string_params)
+    return os.path.join(base_prefix, fname)
+
+
+def wcs_world_order(w):
+    """
+    Prints out the return-order of world coordinates,
+    when using the wcs.WCS.wcs_pix2world() method.
+
+
+    Parameters
+    ----------
+    w : wcs.WCS object, required
+        the wcs.WCS object created from a given header
+        e.g.
+
+            hdulist = fits.open('image.fits')
+            w = wcs.WCS(hdulist[0].header)
+
+
+    Returns
+    -------
+    None
+
+
+    References
+    ----------
+    * astropy.wcs.WCS.wcs_pix2world.__doc__
+
+    """
+
+    lat_order = w.wcs.lat
+    lng_order = w.wcs.lng
+    lat_type = w.wcs.lattyp
+    lng_type = w.wcs.lngtyp
+    world_order = {}
+    if lat_order < lng_order:
+        world_order['first'] = ['lat', lat_type]
+        world_order['last'] = ['lng', lng_type]
+    else:
+        world_order['first'] = ['lng', lng_type]
+        world_order['last'] = ['lat', lat_type]
+
+    for order, coord_info in world_order.iteritems():
+        print '{: <5s}: {} / {}'.format(order, *coord_info)
 

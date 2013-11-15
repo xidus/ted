@@ -20,27 +20,23 @@ def mjd2date(mjd):
 # def seconds_since_1858_11_17_to_datetime(seconds=None):
 def tai2date(seconds=None):
     """
-    Calculates the observation date based on seconds since 1858-11-17.
+    Converts *International Atomic Time (TAI)* to Common-Era (CE) Python datetime object.
 
+    TAI: Number of econds since 1858-11-17.
 
     Parameters
     ----------
-
     seconds : positive int or float, required
         The number of seconds since 17 November 1858
 
-
     Returns
     -------
-
-    Python datetime.datetime object
-
+    Python datetime.datetime
 
     References
     ----------
-
-    * Web page: Survey Interface File for Corrected Frame
-                http://www.sdss.org/DR7/dm/flatFiles/fpC.html
+    Survey Interface File for Corrected Frame
+        http://www.sdss.org/DR7/dm/flatFiles/fpC.html
 
     """
     import datetime as dt
@@ -52,9 +48,7 @@ def tai2date(seconds=None):
         seconds = float(seconds)
 
     except Exception:
-        raise ValueError('Seconds must be a an int or float')
+        raise ValueError('Seconds must be of type int or float')
 
-    reference_date = dt.datetime(1858, 11, 17)
-    td = dt.timedelta(seconds=seconds)
-    return reference_date + td
+    return dt.datetime(1858, 11, 17) + dt.timedelta(seconds=seconds)
 

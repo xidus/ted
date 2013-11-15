@@ -33,6 +33,7 @@ _pkg_home_dir = os.path.dirname(os.path.realpath(__file__))
 class Environment(object):
     """Looks for an environment-configuration file and loads the paths."""
 
+    # Class attributes
     paths = None
     files = None
 
@@ -55,20 +56,18 @@ class Environment(object):
         except:
             raise EnvironmentLoadError('Path-configuration file could not load ...')
 
-        self.paths = doc.get('paths', None)
-        self.fstrings = doc.get('fstrings', None)
+        # This is the important part
+        for env_type in ('files', 'paths'):
+            setattr(self, env_type, {})
+            for env_type_key, env_type_list in doc.get(env_type).iteritems():
+                getattr(self, env_type)[env_type_key] = os.path.join(*env_type_list)
 
-        self.files = {}
-        for file_key, path_list in doc.get('files').iteritems():
-            self.files[file_key] = os.path.join(*path_list)
 
+# Initialise
+env = Environment()
 
 if __name__ == '__main__':
     from pprint import pprint
-
-    # Initialise
-    env = Environment()
-
     pprint(env.paths)
     print ''
     pprint(env.files)
