@@ -65,6 +65,9 @@ class Environment(object):
         # Add the formatstrings...
         self.formatstrings = doc.get('formatstrings')
 
+        # Add the proxies that requests will use
+        self.proxies = doc.get('proxies')
+
 # Initialise
 env = Environment()
 
