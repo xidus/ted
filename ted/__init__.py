@@ -49,6 +49,10 @@ class Environment(object):
             else:
                 raise NoneExistingFileError('File does not exists ...')
 
+        self.load()
+
+    def load(self):
+
         try:
             with open(self._env_file, 'r') as fsock:
                 doc = yaml.load(fsock.read())
@@ -67,6 +71,12 @@ class Environment(object):
 
         # Add the proxies that requests will use
         self.proxies = doc.get('proxies')
+
+    def reload(self):
+
+        self.paths = None
+        self.files = None
+        self.load()
 
 # Initialise
 env = Environment()

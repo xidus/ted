@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from .. import env
+from . import iscoadded
 # from . import load_SNe
 
 _path_data = env.paths.get('data')
@@ -121,7 +122,8 @@ def download_frames_by_sn(bix=None, eix=None, frame_type='fpC', filt='r', pool_s
 
 def get_field_locations(ifname=None, frame_type='fpC', filt='r'):
     """
-    Loads query results and builds lists of local and online addresses.
+    Loads query results from a .csv file and
+    builds lists of local and online addresses.
 
     Parameters
     ----------
@@ -178,24 +180,27 @@ def download_frames(URIs=None, ofnames=None, pool_size=10):
 
 
 def download_URI((URI, ofname)):
-    if os.path.isfile(ofname):
-        return
-
-    opath = os.path.dirname(ofname)
-    if not os.path.exists(opath):
-        os.makedirs(opath)
 
     response = requests.get(URI)
-    with open(ofname, 'wb+') as fsock:
-        fsock.write(response.content)
 
-    cmd = 'echo "{},{},{}\n" >> {}'.format(
-        URI, ofname, response.status_code, env.files.get('log_das')
+    if not os.path.isfile(ofname):
+
+        opath = os.path.dirname(ofname)
+        if not os.path.exists(opath):
+            os.makedirs(opath)
+
+        with open(ofname, 'wb+') as fsock:
+            fsock.write(response.content)
+
+    cmd = 'echo "{},{},{}" >> {}'.format(
+        response.status_code, URI, ofname, env.files.get('log_das')
     )
     os.system(cmd)
 
+    return response.status_code, URI, ofname
 
-def frame_path(df_entry, frame_type='fpC', which='local', filt_ix=2):
+
+def frame_path(df_entry, frame_type='fpC', local=True, filt_ix=2):
     """
     Returns the path of the given image.
 
@@ -209,7 +214,7 @@ def frame_path(df_entry, frame_type='fpC', which='local', filt_ix=2):
 
     fstr_frame = env.formatstrings.get(frame_type)
 
-    if which == 'local':
+    if local:
         base_path = env.paths.get(frame_type)
     else:
         base_path = 'http://das.sdss.org'

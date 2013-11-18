@@ -32,9 +32,6 @@ _proxies = env.proxies
 
 def get_galaxies():
 
-    opath = os.path.join(_path_cas, 'galaxies')
-    ofname = os.path.join(opath, 'galaxies.csv')
-
     sql_galaxies = """\
 SELECT
     objID,
@@ -66,7 +63,7 @@ WHERE
         print('ERROR: {}: CAS says something is wrong ...'.format(
             sys._getframe().f_code.co_name)
         )
-    with open(ofname, 'w+') as fsock:
+    with open(env.files.get('galaxies'), 'w+') as fsock:
         fsock.write(galaxies)
 
 
@@ -186,7 +183,7 @@ def create_unique_field_list():
 
     ipath = os.path.join(_path_cas, 'fields')
     iglob = os.path.join(ipath, '*.csv')
-    ofname = os.path.join(_path_cas, 'fields.csv')
+    ofname = env.files.get('fields')
     tfname = os.path.join(_path_cas, 'fields.tmp')
 
     # Clean up first, since the file is only appended to in the following
@@ -217,6 +214,49 @@ def create_unique_field_list():
 
     with open(ofname, 'w') as fsock:
         fsock.write(''.join(lines))
+
+
+def filter_invalid_from_unique_field_list(dra_min=.1, dra_max=1.):
+    """
+    Remove invalid entries from the unique field
+    list created by *create_unique_field_list()*.
+
+    Parameters
+    ----------
+    dra_min : float
+        the minimum allowable angle separating the RA start and
+        end coordinate for a given field in the unique field list.
+
+    dra_max : float
+        the maximum allowable angle separating the RA start and
+        end coordinate for a given field in the unique field list.
+
+    Side effects
+    ------------
+    <del>Creates a backup of the original field list.</del>
+    Saves the results back into the original destination.
+
+    """
+    import pandas as pd
+    import shutil
+
+    fname = env.files.get('fields')
+    # fn_valid = os.path.splitext(fname)[0] + '_valid.csv'
+    fn_invalid = os.path.splitext(fname)[0] + '_invalid.csv'
+
+    shutil.copyfile(fname, '{}.orig'.format(fname))
+
+    df = pd.read_csv(fname, sep=',')
+    dra = df.raMax - df.raMin
+
+    dra_too_small_ix = (dra < dra_min)
+    dra_too_large_ix = (dra > dra_max)
+
+    df_invalid = df.loc[dra_too_small_ix | dra_too_large_ix]
+    df_valid = df.loc[(~dra_too_small_ix) & (~dra_too_large_ix)]
+
+    df_valid.to_csv(fname, index=False, header=True)
+    df_invalid.to_csv(fn_invalid, index=False, header=True)
 
 
 def count_field_records():
@@ -256,6 +296,10 @@ def count_field_records():
     nfieldrecords = np.loadtxt(nfname, usecols=[0], dtype=[('', int)])
     with open(nfname, 'w+') as fsock:
         fsock.write('\n'.join(nfieldrecords[:-1].astype(str)))
+
+
+def plot_field_coverage(radec, asdf):
+    pass
 
 
 def query(sql_raw):

@@ -19,8 +19,8 @@ dec_max = dec_min + stripe_height
 # Define point pairs for the corners of the stripe extend
 # Vertices define a rectangle moving from the lower right of the plot,
 # to the left, then up, then right, and back to the lower right.
-rect_coords_ra = [ra_min, ra_max, ra_max, ra_min, ra_min]
-rect_coords_dec = [dec_min, dec_min, dec_max, dec_max, dec_min]
+stripe_extent_ra = [ra_min, ra_max, ra_max, ra_min, ra_min]
+stripe_extent_dec = [dec_min, dec_min, dec_max, dec_max, dec_min]
 
 # Width to height
 w2h = stripe_width / stripe_height
