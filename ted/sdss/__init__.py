@@ -39,17 +39,35 @@ _path_sql = env.paths.get('sql')
 _proxies = env.proxies
 
 
+"""
+Content
+-------
+
+__Functions:__
+
+* iscoadded
+* URL_exists
+* load_SNe_candidate_list
+* merge_sne_lists
+* sql_fill_table_SNe
+
+"""
+
+
+###############################################################################
 def iscoadded(run):
     """Test a single run number."""
     return run in (106, 206)
 
 
+###############################################################################
 def URI_exists(uri):
     # import requests
     response = requests.head(uri)
     return response.status_code in (200, 302)
 
 
+###############################################################################
 def load_SNe_candidate_list():
     """
     Loads the SNe list from the CSV-file.
@@ -71,11 +89,12 @@ def load_SNe_candidate_list():
     """
     ifname = env.files.get('snlist')
     if not os.path.exists(ifname):
-        # SDSS_get_snlist()
+        # get_snlist()
         merge_sne_lists()
     return pd.read_csv(ifname, sep=';')
 
 
+###############################################################################
 def merge_sne_lists():
     """
     Reads in the two lists of SNe candidates and merges them into one
@@ -112,7 +131,7 @@ Please add them manually first.'''
         # print SDSS_id, _id
         return 'SN{:0>5d}'.format(_id)
 
-    # String to value or NaN
+    # String to value or NaN (hence the name valornan)
     s2valornan = lambda s: s or np.nan
     conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
         redshift=s2valornan, Peak_MJD=s2valornan)
@@ -180,41 +199,6 @@ Please add them manually first.'''
             df = df.append(df_left[lix])
 
     df.sort_index(by='SDSS_id', ascending=True)
-    # print df.head(10)
-    # raise SystemExit
-
-    # ---
-
-    # print df_left.head(10)
-    # raise SystemExit
-
-    # df = pd.merge(df_left, df_right, on=['SDSS_id'], sort=True)
-    # col_count(df_right)
-    # df = pd.merge(df_left, df_right, how='outer', sort=True)
-    # col_count(df)
-
-    # from IPython import embed
-    # embed()
-
-    # df = df.sort_index(by='SDSS_id', ascending=True)
-    # df = pd.merge(df_left, df_right, how='outer')
-    # df = pd.concat([df_left, df_right], join='outer', join_axes=[''], ignore_index=True, verify_integrity=True)
-    # df = df_left.combine_first(df_right)
-    # df_left.update(df_right)
-    # df = df_left
-
-    # col_count(df_right)
-    # df_right.update(df_left)
-    # col_count(df_right)
-    # df = df_right
-
-    # df = df.sort_index(by='SDSS_id', ascending=True)
-    # df = pd.merge(df_left, df_right, on=df_left.columns.values, sort=True)
-    # df = pd.concat([df_left, df_right], join='outer', ignore_index=True, verify_integrity=True)
-    # df = df.sort_index(by='SDSS_id', ascending=True)
-
-    # print df.head(10)
-    # raise SystemExit
 
     # Check if confirmed by IAUC, i.e. that it has an ID.
     confirmed = (df['IAUC_id'].values != np.nan)
@@ -229,6 +213,7 @@ Please add them manually first.'''
     df.to_csv(ofn_snlists_merged, sep=';', index=False, header=True)
 
 
+###############################################################################
 def sql_fill_table_SNe():
     """
     Loads merged list of SNe candidates and
@@ -237,7 +222,7 @@ def sql_fill_table_SNe():
 
     import sqlite3
 
-    ofn_sqlite_skyml = env.files.get('skymldb')
+    ofn_sqlite_db = env.files.get('db')
     fn_create_table_sne = os.path.join(_path_sql, 'skyml_create_table_SNe.sql')
 
     df = load_SNe_candidate_list()
@@ -247,12 +232,11 @@ def sql_fill_table_SNe():
         sql_create_table_sne = fsock.read()
 
     # Connect to database file
-    with sqlite3.connect(ofn_sqlite_skyml) as con:
+    with sqlite3.connect(ofn_sqlite_db) as con:
         cur = con.cursor()
         cur.execute('DROP TABLE IF EXISTS Supernovae')
         cur.execute(sql_create_table_sne)
-        # from IPython import embed
-        # embed()
+
         sql_insert = '''\
 INSERT INTO Supernovae
     (SDSS_id, SN_type, IAUC_id, Ra, Dec, redshift, Peak_MJD, Flag)
@@ -261,13 +245,19 @@ INSERT INTO Supernovae
 '''
         # cur.executemany(sql_insert, df.values)
         for i, row in enumerate(df.values):
-            # print i
             cur.execute(sql_insert, row)
-        # con.commit()
+
+        con.commit()
+
         # df.to_sql(name='Supernovae', con=con, if_exists='replace')
 
 
-def SDSS_get_snlist():
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+def get_snlist():
     """NOT IMPLEMENTED YET."""
 
     return
@@ -330,9 +320,11 @@ def SDSS_get_snlist():
         # )
 
 
-from . import env
-
-
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 def wcs_world_order(w):
     """
     Prints out the return-order of world coordinates,

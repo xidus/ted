@@ -6,6 +6,9 @@
 
 import numpy as np
 
+"""
+Look into code that I made during the SIP course...
+"""
 
 # From: http://prancer.physics.louisville.edu/astrowiki/index.php/Image_processing_with_Python_and_SciPy
 # Define a function for making a linear gray scale
@@ -21,4 +24,29 @@ def lingray(x, a=None, b=None):
             b = np.max(x)
 
     return 255.0 * (x - float(a)) / (b - a)
+
+
+def blobs(scales=None):
+    """
+    Search for blobs at various scales.
+
+    Parameters
+    ----------
+    scales :
+
+    Returns
+    -------
+    ?
+
+    References
+    ----------
+
+
+    Documentation
+    -------------
+    asdf
+
+
+    """
+    pass
 

@@ -4,11 +4,44 @@
 #   Initial build.
 #
 
+"""
+The Transient-Event Detector (TED)
+
+"""
+
 __author__ = 'Joachim Mortensen <mojo@fys.ku.dk>'
 __version__ = '0.1'
 
 # __all__ = ['pipe', 'sdss']
 
+"""
+Notes to self
+-------------
+
+When `ted/sdss/__init__.py` contains
+
+```python
+from .. import env
+```
+
+Then loading both modules
+
+In [1]: import ted
+In [2]: import ted.sdss
+
+Does not recreate the variables within the scope of `ted`.
+They are simply referred to by variables within the scope of whatever
+module which imported from `..` and into its own namespace.
+
+In [3]: ted.sdss.env
+Out[3]: <ted.Environment at 0xa00be2c>
+
+In [4]: ted.env
+Out[4]: <ted.Environment at 0xa00be2c>
+
+---
+
+"""
 
 import os
 
@@ -30,12 +63,31 @@ class NoneExistingFileError(TEDError): pass
 _pkg_home_dir = os.path.dirname(os.path.realpath(__file__))
 
 
+# class TEDRelPath(yaml.YAMLObject, list):
+
+#     yaml_tag = u'!TEDRelPath'
+
+#     def __init__(self, rel_path):
+
+#         self.rel_path = rel_path
+#         self.abs_path = os.path.join(_pkg_home_dir, self.rel_path)
+
+#     def __repr__(self):
+#         return [self.abs_path]
+
+#     def __str__(self):
+#         return [self.abs_path]
+
+
+# __ted = TEDRelPath('sql')
+# print __ted
+# print '\n'.join(*__ted)
+# print repr(env.paths.get('sql'))
+
+
+
 class Environment(object):
     """Looks for an environment-configuration file and loads the paths."""
-
-    # Class attributes
-    paths = None
-    files = None
 
     def __init__(self, ifname=None):
 
@@ -62,9 +114,13 @@ class Environment(object):
 
         # This is the important part
         for env_type in ('files', 'paths'):
+            # Re-initialise
             setattr(self, env_type, {})
             for env_type_key, env_type_list in doc.get(env_type).iteritems():
                 getattr(self, env_type)[env_type_key] = os.path.join(*env_type_list)
+
+        # Add the sql-script directory
+        getattr(self, 'paths')['sql'] = os.path.join(_pkg_home_dir, 'sql')
 
         # Add the formatstrings...
         self.formatstrings = doc.get('formatstrings')
@@ -72,14 +128,9 @@ class Environment(object):
         # Add the proxies that requests will use
         self.proxies = doc.get('proxies')
 
-    def reload(self):
-
-        self.paths = None
-        self.files = None
-        self.load()
-
 # Initialise
 env = Environment()
+
 
 if __name__ == '__main__':
     from pprint import pprint

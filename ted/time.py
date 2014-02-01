@@ -4,6 +4,15 @@
 #   Initial build.
 #
 
+def format_HHMMSS_diff(beg, end):
+        diff = end - beg
+        HH = diff // 60 // 60
+        MM = diff // 60 - HH * 60
+        SS = diff % 60
+        return '{:.0f}:{:0>2.0f}:{:0>6.3f}'.format(HH, MM, SS)
+
+
+
 def mjd2date(mjd):
     """Converts *Modified* Julian Date (MJD) to Common-Era (CE) Python datetime object."""
     import datetime as dt

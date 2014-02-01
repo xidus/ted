@@ -35,6 +35,7 @@ _formatstrings = env.formatstrings
 
 _proxies = env.proxies
 
+_sdss_das = 'http://das.sdss.org/'
 
 def fits_path_formatter(fmt='fpC'):
     """Returns correctly formatted URI"""
@@ -43,6 +44,98 @@ def fits_path_formatter(fmt='fpC'):
 
 def create_download_URIs():
     """Returns a list/np.array of desired URIs."""
+    pass
+
+
+class Field(object):
+
+    _filters = 'ugriz'
+
+    def __init__(self, run, rerun, camcol, field):
+
+        self.run = run
+        self.rerun = rerun
+        self.camcol = camcol
+        self.field = field
+
+    # As a property, I can use Field.field_parameters
+    # instead of calling it explicitly as a method
+    @property
+    def field_parameters(self):
+        """Return a dictionary with the field parameters"""
+        return dict(
+            run=self.run, rerun=self.rerun,
+            camcol=self.camcol, field=self.field
+        )
+
+    def frame_parameters(self, filt=None):
+        """
+        Return a dictionary with the parameters
+        used in the frame format string.
+
+        """
+        if filt not in self._filters:
+            err_fstr = 'Argument `filt` must have one of the following values {} ...'
+            raise FrameFormatError(err_fstr.format(','.join(list(self._filters))))
+        frame_parameters = self.field_parameters
+        frame_parameters.update(filt=filt)
+        return frame_parameters
+
+    def relative_path(self, frame_type='fpC'):
+        """Returns correctly formatted URI"""
+        return _formatstrings.get(frame_type).format(*self.parameters)
+
+    def download(self, frame_type='fpC', only_if_not_exists=True):
+        # Get online and local paths
+        # Download and check file
+        # Save frame information to database.
+        pass
+
+    # def local_file_checks_out(self, frame_type='fpC'):
+    # def local_file_is_incorrupt(self, frame_type='fpC'):
+    def local_file_is_readable(self, frame_type='fpC'):
+        # Requires astropy.io.fits...
+        # ... or should I just use zlib to try to unzip the file?
+        import gzip
+        try:
+            ifname = path_local(self.relative_path(frame_type=frame_type))
+            with gzip.open(ifname, 'rb') as fsock:
+                pass
+        except:
+            return False
+        else:
+            return True
+
+    def local_file_exists(self, frame_type='fpC'):
+        pass
+
+    def online_file_exists(self, frame_type='fpC'):
+        pass
+
+    def to_db(self):
+        pass
+
+
+def path_local(relative_URI, subdirs=[]):
+    return os.path.join(_path_das, *subdirs + [relative_URI])
+
+
+def path_online(relative_URI, subdirs=[]):
+    return os.path.join(_sdss_das, *subdirs + [relative_URI])
+
+
+def register_fields(frame_type='fpC', filt='r'):
+    """
+
+    """
+    pass
+
+
+# def register_frame(ifname):
+def frame2db(run, rerun, camcol, field, filt, frame_type='fpC'):
+    """
+    Add the field to the
+    """
     pass
 
 
@@ -55,6 +148,7 @@ def download_frames_by_radec(radec, frame_type='fpC'):
     das_root = os.path.join(_path_das, frame_type)
 
 
+###############################################################################
 def download_frames_by_complete_result_list(frame_type='fpC', filt='r', pool_size=10):
     """
     Parameters
@@ -232,6 +326,167 @@ def frame_path(df_entry, frame_type='fpC', local=True, filt_ix=2):
     return os.path.join(base_path, fstr_frame.format(**string_params))
 
 
+def check_field_list(do_get_frames=True):
+    """
+    Check the consistency of each file.
+
+    Should preferably have been done before the cutout algorithm, and
+    non-repairable and non-downloadable files should be flagged so that
+    they can be separated out above when testing the other criteria.
+
+    Side effects
+    ------------
+    files : list
+        list of filenames for the covering and existing frames
+
+    Steps
+    -----
+
+    Go through each offline frame location and
+    verify the downloaded files' integrity by
+
+        1.  Verifying that the file exists.
+        2.  Opening it with astropy.io.fits
+        3.  If file exists, but is corrupted
+        4.  Try to download it once more
+        5.  Repeat step 2. through 3.
+        6.  If file is corrupted, exclude the corresponding
+            field from the the fields.csv file.
+
+    """
+
+    import shutil
+
+    fname = env.files.get('fields')
+    fn_nonfpCs = os.path.splitext(fname)[0] + '_invalid_nonfpCs.csv'
+
+    fields = pd.read_csv(fname)
+
+    # Selection indices
+    six = np.array([]).astype(bool)
+
+    for i in range(fields.shape[0]):
+
+        print '{: >7,d}'.format(i),
+
+        # Note the small difference between the variable names here.
+        do_get_frame = do_get_frames
+
+        # field = fields.iloc[i]
+        field = fields[i:i + 1]
+        filename = frame_path(field)
+
+        # If frames is coadded, leave it out of the final list for now
+        if field.run in (106, 206):
+            print u'CA', filename, '... Skipping ...'
+
+            six = np.append(six, False)
+            continue
+
+        # If it does not exist, download
+        if not os.path.isfile(filename):
+            print u'!E', filename,
+
+            if do_get_frame:
+                print '... Trying to download ...',
+
+                URI = frame_path(field, local=False)
+                http_status, URI_, filename_ = download_URI((URI, filename))
+
+                # Do we have it?
+                if http_status is 200:
+                    print '... Downloaded ...',
+
+                    # No need to get it again, if integrity test fails.
+                    do_get_frame = False
+
+                else:
+                    print '... Download failed', http_status, '... Skipping ...'
+
+                    six = np.append(six, False)
+                    continue
+
+            else:
+                print '... Not downloading ... Field kept ...'
+                six = np.append(six, True)
+                continue
+
+        # At this point, it can be assumed that the file is on disk
+        if do_get_frame:
+            print u' E', filename,
+
+        print '... Checking file integrity ...',
+
+        if not is_FITS_file(filename):
+
+            if not do_get_frame:
+                print '... No more download tries ... Skipping'
+                six = np.append(six, False)
+                continue
+
+            else:
+                # Try to download one more time
+                URI = frame_path(field, local=False)
+                http_status, URI_, filename_ = download_URI((URI, filename))
+
+                # Do we have it?
+                if http_status is 200:
+                    print '... Downloaded ...',
+
+                else:
+                    print '... Download failed', http_status, '... Skipping ...'
+                    six = np.append(six, False)
+                    continue
+
+            # At this point, we have the file, but have not tested its integrity
+            if is_FITS_file(filename):
+                print 'VALID ...'
+                six = np.append(six, True)
+            else:
+                print 'NOT VALID ...'
+                six = np.append(six, False)
+
+    # How many where excluded?
+
+    # Now separate the invalid/non-existing files from the final list.
+    fields_fpCs = fields.iloc[six]
+    fields_nonfpCs = fields.iloc[~six]
+
+    fields_fpCs.to_csv(fname, index=False, header=True)
+    fields_nonfpCs.to_csv(fn_nonfpCs, index=False, header=True)
+
+
+def is_FITS_file(ifname):
+    """
+    Check to see if `ifname` is a valid, i.e. readable, FITS file.
+
+    """
+
+    from astropy.io import fits
+
+    try:
+        hdus = fits.open(ifname)
+
+    except IOError:
+        retval = False
+
+    else:
+        retval = True
+
+    finally:
+
+        if 'hdus' in dir():
+            hdus.close()
+
+        return retval
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 def DEPRECATED_download_fields_from_list(pool_size=10):
     """
     Downloads FITS files based on URIs in the file
@@ -272,6 +527,7 @@ def DEPRECATED_download_fields_from_list(pool_size=10):
     )
 
 
+###############################################################################
 def DEPRECATED_get_FITS(parameter_dict=None, url_fmt='fpC', subdir=None):
 
     if parameter_dict is None:
@@ -308,6 +564,7 @@ def DEPRECATED_get_FITS(parameter_dict=None, url_fmt='fpC', subdir=None):
         fsock.write(response.content)
 
 
+###############################################################################
 def DEPRECATED_export_fpC_URIs():
     """
     Looks through cas directory and loads all .csv files and for
