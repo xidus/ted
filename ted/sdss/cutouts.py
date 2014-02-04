@@ -1673,7 +1673,7 @@ def create_cutout_data():
         cs.initialise()
 
 
-def the_rest(N_folds=5):
+def do_grid_search(N_folds=5):
 
     css, targets = get_cutout_sequences()
 
@@ -1748,7 +1748,7 @@ def the_rest(N_folds=5):
 
     vec_predict = np.zeros(N_items).astype(bool)
     for i in range(N_items):
-        cs = css_train[i]
+        cs = css_test[i]
         cs.load_and_setup(border=10, bg_model='median')
         vec_predict[i] = cs.is_transient(sigma=sigma_ii, tau=tau_jj)
 
