@@ -403,11 +403,11 @@ def build_tlist():
     # Build data set
     ra = np.append(snlist.Ra.values, gx_chosen.Ra.values)
     dec = np.append(snlist.Dec.values, gx_chosen.Dec.values)
-    is_SN = np.append(np.ones(N_sne), np.zeros(N_gx_c)).astype(bool)
+    is_sn = np.append(np.ones(N_sne), np.zeros(N_gx_c)).astype(bool)
 
     # Collect and shuffle the lines, so that I only need to split
     # the data set N-fold, when using the data.
-    dataset = np.array([ra, dec, is_SN]).T
+    dataset = np.array([ra, dec, is_sn]).T
     # Do in-place shuffle
     """
     This is an in-place operation on a view of the original array.
@@ -417,10 +417,10 @@ def build_tlist():
     """
     np.random.shuffle(dataset)
 
-    # tlist = pd.DataFrame(data=dict(Ra=ra, Dec=dec, is_SN=is_SN))
+    # tlist = pd.DataFrame(data=dict(Ra=ra, Dec=dec, is_sn=is_sn))
     tlist = pd.DataFrame(
         data=dataset,
-        columns=['Ra', 'Dec', 'is_SN']
+        columns=['Ra', 'Dec', 'is_sn']
     )
     print tlist.info()
     print tlist.head(10)

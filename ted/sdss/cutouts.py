@@ -1654,8 +1654,8 @@ def get_cutout_sequences():
 
         # Create cutout object
         params.update(
-            radec=np.array([tlist.Ra[i], tlist.Dec[i]]),
-            is_sn=tlist.is_sn[i]
+            radec=np.array([tlist.Ra.values[i], tlist.Dec.values[i]]),
+            is_sn=tlist.is_sn.values[i]
         )
         cutout_sequences.append(CutoutSequence(**params))
         targets.append(tlist.is_sn[i])
