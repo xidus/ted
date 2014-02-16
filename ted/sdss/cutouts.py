@@ -91,8 +91,8 @@ class CutoutSequence(object):
         self.is_sn = is_sn
 
         # Get uniquely-formatted coordinate and size string
-        self.coord_str = crd2str(*self.radec)
-        self.size_str = '{}x{}'.format(*self.cutout_size)
+        self.crd_str = crd2str(self.radec.ravel())
+        self.size_str = '{}x{}'.format(*self.size)
 
         # Define the pixel distance to the edges of the cutout image
         self.dy = np.floor(self.size[1] / 2)
@@ -107,19 +107,33 @@ class CutoutSequence(object):
         # print '(RA, Dec) =', world
         # print '(Dec, RA) =', world_r
 
+        # Create empty dictionary for the background models (templates)
+        self.bg_models = {}
+
+        # Set modes
+        self.initialised = False
+        self.loaded = False
+
+    # The time consumer
+    # -----------------
+
     def initialise(self):
         """
-        Step 1
-        ------
-        * Initialises directory strutcure for the cutouts.
-        * Loads all fields and selects those that cover.
-        * Based on the list of covcering fields, it obtains
-          filenames of valid FITS files that can be loaded.
-        * Based on this list of files, it creates raw cutouts
-          from the frames where sufficient space is available
-          for the cutout size.
+        Initialise cutout sequence
+
+        Steps
+        -----
+        * Create directories for the cutout sequence.
+        * Load all fields and select those that cover the given coordinate.
+        * Based on the list of covering fields, obtain filenames of valid
+          FITS files that can be loaded. (Check file integrity for each
+          file by loading it. If it is loadable, it is considered valid.)
+        * Open each file in the list of valid FITS files. If there is
+          sufficient space available around the pixel corresponding to the
+          given coordinate, create a cutout and save it and .PNG and .fit.gz.
         * Gunzip the raw cutouts before registration (WCSREMAP requires this).
         * Perform WCS-registration using the first-recorded frame as template.
+        * Create background models.
 
         The registered cutouts can now be loaded into a datacube for analysis.
 
@@ -127,17 +141,12 @@ class CutoutSequence(object):
 
         # Define and build directory structure for this coordinate
         # Creates self.cpaths
-        self.define_directory_structure()
+        self.create_directories()
 
         # # Selection I
         # Get covering fields
-        self.fields = get_covering_fields(self.radec)
-
-        """
-        These fields form the basis input for the cutout algorithm which will
-        determine the coverage further and chose frames that cover enough of
-        the surrounding area that a cutout of the required size can be made.
-        """
+        # self.fields = get_covering_fields(self.radec)
+        self.get_covering_fields()
 
         # Selection II
         # creates self.files,
@@ -146,6 +155,7 @@ class CutoutSequence(object):
 
         # Selection III
         # Selects frames for which a cutout can be made.
+        # Creates files on disk to be processed externally.
         self.create_raw_cutouts()
 
         # Cutout overview
@@ -153,15 +163,56 @@ class CutoutSequence(object):
         # Where to svae these?
         # self.cutout_overview()
 
-        # Cutout preprocessing
+        # Process raw cutouts
+        # -------------------
+
+        # Gunzip raw cutouts
         self.gunzip()
+
+        # USe WCSREMAP to astrometrically register cutouts to the oldest cutout
         self.wcsremap() # index=0
 
-    def load_and_setup(self, border=10, bg_model='median'):
-        # Load cutouts and prepare analysis
+        # Set initialised mode
+        self.initialised = True
+
+    # The memory hurdle
+    # -----------------
+
+    def load(self, pad=0, bg_model='median', force=False):
+        """
+        Load remapped cutouts and perform preliminary steps for the analysis
+
+        Parameters
+        ----------
+        pad : int, 0 < min(self.size)
+            The registered frames have border effects from the resampling. Use
+            pad to focus the analysis only on the central part of the frames.
+            Only pixels that are farther than <pad> number of pixels from the
+            border of the frames.
+        bg_model : str, choice
+            Which background model to subtract from the remapped frames to
+            obtain the residual images?
+        force : bool
+            Whether or not to force running `self.initialise()`, if this step
+            has not been done prior to running this method.
+
+        Side effects
+        ------------
+        See respective methods.
+
+        """
+
+        if not self.initialised:
+            print 'CutoutSequence not initialised ...'
+            if force or 'y' == raw_input('Do you wish to initialise? (y/N)'):
+                print 'Initialising CutoutSequence ...'
+                self.initialise()
+            else:
+                return None
 
         # Load data cube
-        self.load_cutouts(border=border)
+        # self.load_cutouts(which='residual', pad=pad)
+        self.load_registered_cutouts(pad=pad)
 
         # Create background models
         # mean and median
@@ -170,7 +221,13 @@ class CutoutSequence(object):
         # Residuals
         self.calculate_residuals(bg_model=bg_model)
 
-    def is_transient(self, sigma, tau):
+        # The data are now available for analysis.
+        self.loaded = True
+
+    # Work horses
+    # -----------
+
+    def is_transient(self, experiment='any'):
         """
         Finds out if there is a transient event in the sequence or not.
 
@@ -191,16 +248,25 @@ class CutoutSequence(object):
 
         """
 
-        # Blob detection
-        self.calculate_LoG(sigma=sigma)
+        if experiment == 'any':
+            """
+            Experiment: Just see if there is anything.
 
-        # Threshold
-        self.threshold_intensities(tau=tau)
+            Is there any positive reponse at all and anywhere
+            in the sequence, i.e. the cube of images?
 
-        # Cutout results
-        return np.any(self.cube_cut.ravel())
+            """
+            return np.any(self.cube_cut.ravel())
 
-    def define_directory_structure(self):
+            """
+            Experiment: Positive only if consistens consecutive position of a signal.
+
+            """
+
+    # Service methods for self.initialise()
+    # -------------------------------------
+
+    def create_directories(self):
         """
         Generate a path structure that should be unique for each coordinate
 
@@ -220,7 +286,7 @@ class CutoutSequence(object):
         cpaths['root'] = os.path.join(env.paths.get('cutouts'), self.size_str)
 
         # Define directory particular for this cutout sequence
-        cpaths['coord'] = os.path.join(env.paths.get('cutouts'), self.coord_str)
+        cpaths['coord'] = os.path.join(env.paths.get('cutouts'), self.crd_str)
 
         # Define subdirectories within the directory
         # particular for this cutout sequence
@@ -229,6 +295,7 @@ class CutoutSequence(object):
             ('png', 'png'),
             ('gunzip', 'fit'),
             ('wcsremap', 'wcsremap'),
+            # ('residual', 'residual'),
             ('results', 'results'),
         ]
         for key, subdir in subdirs:
@@ -247,6 +314,16 @@ class CutoutSequence(object):
         """Shortcut to retrieving a path from self.cpaths."""
         return self.cpaths.get(key)
 
+    def get_covering_fields(self):
+        """
+        These fields form the basis input for the cutout algorithm which will
+        determine the coverage further and chose frames that cover enough of
+        the surrounding area that a cutout of the required size can be made.
+
+        """
+
+        self.fields = get_covering_fields(self.radec)
+
     def get_consistent_frames(self, redownload=True):
         """
         Check the consistency of each file.
@@ -255,7 +332,7 @@ class CutoutSequence(object):
         non-repairable and non-downloadable files should be flagged so that
         they can be separated out above when testing the other criteria.
 
-        I did not have for this, however.
+        I did not have time for this, however.
 
         Side effects
         ------------
@@ -270,7 +347,8 @@ class CutoutSequence(object):
         self.coadded = []
 
         for i in range(nframes):
-            field = self.fields.iloc[i]
+            # print '{: >3d}'.format(i)
+            field = self.fields.iloc[i:i + 1]
             filename = frame_path(field)
 
             if field.run in (106, 206):
@@ -304,7 +382,7 @@ class CutoutSequence(object):
                     from .das import download_URI
 
                     # Close file before redownloading
-                    if hdus in dir():
+                    if 'hdus' in dir():
                         hdus.close()
 
                     # print 'Trying to (re-)download ...'
@@ -324,7 +402,7 @@ class CutoutSequence(object):
                             continue
 
                         finally:
-                            if hdus in dir():
+                            if 'hdus' in dir():
                                 hdus.close()
 
                     else:
@@ -334,7 +412,7 @@ class CutoutSequence(object):
                         continue
 
             finally:
-                if hdus in dir():
+                if 'hdus' in dir():
                     hdus.close()
 
         # self.fpCs = files
@@ -437,12 +515,16 @@ class CutoutSequence(object):
         # astropy.io.fits will not overwrite existing files,
         # so I delete them all before creating the cutouts.
         print 'Can not overwrite existing files, so remove old files ...'
-        cmd_fits_clean = 'rm {}'.format(os.path.join(self.path('fits'), '*.fit.gz'))
+        cmd_fits_clean = 'rm {}'.format(
+            os.path.join(
+                self.path('fits'), '*.fit.gz'
+            )
+        )
         print cmd_fits_clean
         print ''
         os.system(cmd_fits_clean)
 
-        print 'Loading each image and create cutout when possible (\'*\' at the end)'
+        print 'Load each image and create cutout when possible (marked by \'*\' at the end)'
         # print 'In DS9 fpCs have East up, North right'
         for i, ifname_cutout in enumerate(self.fpCs):
 
@@ -821,101 +903,190 @@ wcsremap \
             # print(cmd_wcsremap)
             os.system(cmd_wcsremap)
 
-    def load_cutouts(self, border=10):
+    # Service methods for loading and initialising the data for the analysis
+    # ----------------------------------------------------------------------
+
+    # def create_residuals(self, bg_model='median'):
+    #     """
+    #     Creates residual images from the WCSREMAP'ed frames
+    #     and saves them to disk in FITS format.
+
+    #     Side effects
+    #     ------------
+    #     self.cube_residual : 3D-array
+    #     Files on disk located at self.path('residual')
+
+    #     """
+
+    #     # Get self.cube_remap if not already in memory
+    #     if not 'cube_remap' in dir(self):
+    #         self._load_cube_remap()
+
+    #     # Get self.template_median|mean
+    #     self.calculate_background_models()
+
+    #     # Get self.cube_residual
+    #     self.calculate_residuals(bg_model=bg_model)
+
+    #     # Get output filenames for residuals
+    #     ifiles = self.get_filenames('wcsremap', '*.fit')
+    #     ofiles = self.replace_in_string_list(ifiles, 'wcsremap', 'residual')
+
+    #     # Get WCS header from template file.
+    #     hdulist = fits.open(ifiles[0])
+    #     _header = hdulist[0].header
+    #     hdulist.close()
+
+    #     # import copy
+
+    #     for i, ofname in enumerate(ofiles):
+    #         print '{: >3d}'.format(i),
+    #         if i and not (i + 1) % 10: print ''
+    #         # header = copy.deepcopy(_header)
+    #         # header.set('', )
+    #         fitskw = dict(data=self.cube_residual[:, :, i], header=_header)
+    #         hdu = fits.PrimaryHDU(**fitskw)
+    #         hdu.writeto(ofname)
+
+    # def replace_in_string_list(self, list_=None, from_=None, to=None):
+    #     """Do same replacement for each string in a list."""
+    #     return map(lambda s: s.replace(from_, to), list_)
+
+    def get_filenames(self, path=None, match=None):
+        """Get all files within directory specified by path."""
+        import glob
+        iglob = os.path.join(self.path(path), match)
+        return sorted(glob.glob(iglob))
+
+    # def load_cutouts(self, which=None, pad=0):
+    #     """
+    #     Loads a data cube of the chosen kind.
+
+    #     Parameters
+    #     ----------
+    #     which : str | list of strings
+    #         What data to load? Choose among the following:
+    #         * remap : the WCSREMAP'ed .fit-files
+    #         * residual : the residual images .fit-files
+
+    #     Side effects
+    #     ------------
+    #     self.cube_<which> : 3D-array
+    #         Data cube containing cutout frames of the <which> kind.
+
+    #     Future
+    #     ------
+
+    #     """
+
+    #     if which == 'remap':
+    #         self._load_cube_remap()
+
+    #     else:
+    #         # which := residual
+    #         self._load_cube_residual(pad=pad)
+
+    def load_registered_cutouts(self, pad=0):
         """
-        Load all remapped images and calculate the background model image
+        Load all remapped images
+
+        Assumptions
+        -----------
+        Using `files` assumes that no failed writings to disk occurred.
+            (see Future below)
 
         Side effects
         ------------
         self.cube_remap : 3D-array
             Data cube containing the remapped cutout frames.
 
+        Future
+        ------
+        Check integrity of the fits files found in the directory.
+        Try: to load each image and save it into the data cube.
+        Except: failed read-ins. Save the filename in list self.wcsremap_failed
+        Else: Add the loaded image data to the cube. Save the filename into
+            list for future reference.
+
         """
 
-        import glob
+        files = self.get_filenames('wcsremap', '*.fit')
+        cube_shape = self.size + (len(files),)
+        self._cube_remap = np.zeros(cube_shape)
+        for i, ifname in enumerate(files):
+            print '{: >3d}, '.format(i),
+            if i and not (i + 1) % 10: print ''
+            hdulist = fits.open(ifname)
+            self._cube_remap[:, :, i] = hdulist[0].data
+            hdulist.close()
 
-        iglob = os.path.join(self.path('wcsremap'), '*.fit')
-        files = sorted(glob.glob(iglob))
+        self.cube_remap = self.get_view(self._cube_remap, pad=pad)
+
+    # def _load_cube_residual(self, pad=0):
+
+    #     files = self.get_filenames('residual', '*.fit')
+    #     cube_shape = self.size + (len(files),)
+    #     self._cube_residual = np.zeros(cube_shape)
+    #     for i, ifname in enumerate(files):
+    #         print '{: >3d}, '.format(i),
+    #         if i and not (i + 1) % 10: print ''
+    #         hdulist = fits.open(ifname)
+    #         self._cube_residual[:, :, i] = hdulist[0].data
+    #         hdulist.close()
+
+    #     # Create view
+    #     self.cube_residual = self.get_view(self._cube_residual, pad=pad)
+
+    def get_view(self, data_cube, pad=0):
+        """Creates a padded view into the data cube."""
+        Ny, Nx = self.size
+        return data_cube[pad:Ny - pad, pad:Nx - pad, :]
+
+    def calculate_background_models(self):
+        """
+        Get the template images to subtract from all the images
+
+        Side effects
+        ------------
+        self.bg_models[<bg_model>] : dict
+            Updated with the possible background models.
 
         """
-        Using `files` assumes that no failed writings to disk occurred.
-        """
-        flen = len(files)
-
-        if 0:
-
-            # KEEP this in order to create figures that show
-            # the output, when not masking out the border.
-
-            # Do not pad (do so later, when LoG filtering has been performed)
-            cube_shape = self.size + (flen,)
-            # print cube_shape
-            cube_remap = np.zeros(cube_shape)
-
-            for i, ifname in enumerate(files):
-                print i,
-                hdulist = fits.open(ifname)
-                primary = hdulist[0]
-                cube_remap[:, :, i] = primary.data
-
-                # Since all frames are WCSREMAP'ed, they
-                # should have the same WCS reference. (CHECK and make sure!)
-                # if i == 0:
-                #     w = wcs.WCS(primary.header)
-
-                hdulist.close()
-
-        else:
-
-            pad = border
-            Ny, Nx = self.size
-            self.cube_shape = (Ny - 2 * pad, Nx - 2 * pad, flen)
-            print self.cube_shape
-            self.cube_remap = np.zeros(self.cube_shape)
-
-            print 'Filling data cube:'
-            for i, ifname in enumerate(files):
-                print '{: >3d}, '.format(i),
-                if i and not (i + 1) % 10:
-                    print ''
-                hdulist = fits.open(ifname)
-                primary = hdulist[0]
-                self.cube_remap[:, :, i] = primary.data[pad:Ny - pad,
-                                                        pad:Nx - pad]
-
-                # Since all frames are WCSREMAP'ed, they
-                # should have the same WCS reference.
-                # (CHECK and make sure!)
-                # if i == 0 and False:
-                #     # This throws a warning from AstroPy
-                #     w = wcs.WCS(primary.header)
-                #     # To avoid the WCS warning from astropy.wcs.wcs,
-                #     # I may need to use header from the original template frame
-                hdulist.close()
-
-    def get_background_models(self):
-        """Get the template image to subtract from all the images"""
 
         # Median gives sharper edges close to the zero-padding
-        self.template_median = np.median(self.cube_remap, axis=2)
+        self.bg_models['median'] = np.median(self.cube_remap, axis=2)
 
-        # Smoother edges
-        self.template_mean = np.mean(self.cube_remap, axis=2)
+        # Smoother edges, but results are affected by sharp transients
+        # self.template_mean = np.mean(self.cube_remap, axis=2)
+        self.bg_models['mean'] = np.mean(self.cube_remap, axis=2)
 
-    def calculate_residuals(self, bg_model='mean'):
-        """Calculate the residual images"""
+    def calculate_residuals(self, bg_model=None):
+        """
+        Calculate the residual images
 
-        if bg_model not in ('mean', 'median'):
-            bg_model = 'mean'
+        Parameters
+        ----------
+        bg_model : str, choice
+            Chosen background model.
 
-        if bg_model == 'median':
-            self.template = self.template_median
+        Side effects
+        ------------
+        self.template : 2D-array
+            The chosen background model if available (None otherwise)
+        self.cube_residuals : 3D-array
 
-        elif bg_model == 'mean':
-            self.template = self.template_mean
+        """
+
+        self.template = self.bg_models.get(bg_model)
+        if self.template is None:
+            print 'Model not in ({}).'.format(', '.join(self.bg_models.keys()))
+            return None
 
         # Subtract the background template
         self.cube_residual = self.cube_remap - self.template[:, :, None]
+
+    # Service methoids for the work horse method `self.is_transient`
+    # --------------------------------------------------------------
 
     def calculate_LoG(self, **kwargs):
         """
@@ -926,7 +1097,7 @@ wcsremap \
         Parameters
         ----------
         radius : float, int
-            The pixel radius of the blob. Probbaly an estimate.
+            The pixel radius of the blob. Probably an estimate.
         sigma : float
             The width of the LoG filter. If radius is given, the given value
             of sigma is ignored and instead calculated from radius.
@@ -1056,13 +1227,13 @@ wcsremap \
         for i in range(self.cube_remap.size[2]):
 
             # Best way to threshold?
-            # CHECK SIP!!!!
-            # Initial idea
-            # t_cut = tau * (image[:].max() - image[:].min())
+            # Initial idea (KSP agreed after discussing it with him)
+            t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
             # thresholding i SIP course was done on max(image),
-            # i.e. negative intensities do not event count
-            """I do this to begin with. But this may introduce a bias."""
-            t_cut = tau * (self.cube_remap[:].max())
+            # i.e. negative intensities do not influence the positive range of
+            # values used to determine the intensity value of the threshold.
+            # This may introduce a bias for images with negative intensities.
+            # t_cut = tau * (self.cube_remap[:].max())
 
             # Get thresholded binary field
             self.cube_cut[:, :, i] = (
@@ -1116,11 +1287,13 @@ def DEPRECATED_get_crd(ix=None, src='snlist'):
         return radec
 
 
-def crd2str(*radec):
+def crd2str(radec):
     """
     Returns a unique string-representation of coordinate
 
     """
+    # print radec.flatten()
+    # print '{:f}, {:f}'.format(*radec.flatten())
     return '{:0>10.5f}__{:0>10.5f}'.format(*radec).replace('.', '_')
 
 
@@ -1139,21 +1312,24 @@ def get_covering_fields(radec):
         List of fields that cover the input coordinate.
 
     """
+    radec_ = radec.ravel()
+    # print radec_.shape
+    # raise SystemExit
 
     # Raw list of fields
-    fields_ = pd.read_csv(env.files.get('fields'), sep=',')
+    fields = pd.read_csv(env.files.get('fields'), sep=',')
 
     # Get indices for fields that cover the chosen coordinate
-    RA_geq_ramin = (fields_.raMin <= radec[0])
-    RA_leq_ramax = (fields_.raMax >= radec[0])
-    Dec_geq_decmin = (fields_.decMin <= radec[1])
-    Dec_leq_decmax = (fields_.decMax >= radec[1])
+    RA_geq_ramin = (fields.raMin <= radec_[0])
+    RA_leq_ramax = (fields.raMax >= radec_[0])
+    Dec_geq_decmin = (fields.decMin <= radec_[1])
+    Dec_leq_decmax = (fields.decMax >= radec_[1])
 
     # The conjunction of these boolean arrays gives
     # the fields that satisfy the above need.
     ix = (RA_geq_ramin & RA_leq_ramax & Dec_geq_decmin & Dec_leq_decmax)
 
-    return fields_.loc[ix]
+    return fields.loc[ix]
 
 # ---
 
@@ -1646,26 +1822,21 @@ def get_cutout_sequences():
 
     tlist = pd.read_csv(env.files.get('tlist'))
 
+    # print tlist.info()
+    # print tlist.head()
+
     params = dict(size=(101, 101))
 
     cutout_sequences = []
     targets = []
     for i in range(tlist.shape[0]):
+        # print '{: >3d}'.format(i)
 
         # Create cutout object
         params.update(
             radec=np.array([tlist.Ra[i], tlist.Dec[i]]),
             is_sn=tlist.is_sn[i]
         )
-        # params.update(
-        #     radec=np.array([tlist.Ra.values[i], tlist.Dec.values[i]]),
-        #     is_sn=tlist.is_sn.values[i]
-        # )
-        print params
-        for item in params.iteritems():
-            print type(item)
-            print item
-            print
         cutout_sequences.append(CutoutSequence(**params))
         targets.append(tlist.is_sn[i])
 
@@ -1678,7 +1849,8 @@ def create_cutout_data():
 
     """
     css, targets = get_cutout_sequences()
-    for cs in css:
+    for i, cs in enumerate(css):
+        # print '{: >3d}'.format(i)
         cs.initialise()
 
 
@@ -1722,17 +1894,32 @@ def do_grid_search(N_folds=5):
     # Load and setup the data for all the cutouts
     for k in range(N_train):
 
+        # Select the training data point (the cutout sequence)
         cs = css_train[k]
-        cs.load_and_setup(border=10, bg_model='median')
 
+        # Load registered frames and get residuals using <bg_model>
+        cs.load(pad=10, bg_model='median')
+
+        # Grid search
+        # -----------
+
+        # Sigmas
         for i in range(N_sigmas):
-            sigma = sigmas[i]
+            # Blobs
+            # No need to perform LoG every time I change between thresholds
+            cs.calculate_LoG(sigma=sigmas[i])
+            cs.compare_neighbours()
+
+            # Threshold values
             for j in range(N_taus):
-                tau = taus[j]
-                cube_predict[i, j, k] = cs.is_transient(sigma=sigma, tau=tau)
+                cs.threshold_intensities(tau=taus[j])
+
+                # Save the resulting prediction
+                cube_predict[i, j, k] = cs.is_transient()
 
     # Training accuracy
     # N_sigmas x N_taus
+    # ^ : XOR
     accuracies = (cube_predict ^ targets_train[None, None, :]).sum(axis=2) / N_train
 
     # Get indices of the maximum
@@ -1758,8 +1945,11 @@ def do_grid_search(N_folds=5):
     vec_predict = np.zeros(N_items).astype(bool)
     for i in range(N_items):
         cs = css_test[i]
-        cs.load_and_setup(border=10, bg_model='median')
-        vec_predict[i] = cs.is_transient(sigma=sigma_ii, tau=tau_jj)
+        cs.load(pad=10, bg_model='median')
+        cs.calculate_LoG(sigma=sigma_ii)
+        cs.compare_neighbours()
+        cs.threshold_intensities(tau=tau_jj)
+        vec_predict[i] = cs.is_transient()
 
     # Accuracy is a scalar, since we sum over the only dimension
     accuracy = (vec_predict ^ targets_test).sum() / N_items
