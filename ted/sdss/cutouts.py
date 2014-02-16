@@ -340,6 +340,7 @@ class CutoutSequence(object):
             list of filenames for the covering and existing frames
 
         """
+        print 'Get consistent frames ...'
 
         nframes = self.fields.shape[0]
         self.files = []
@@ -416,7 +417,7 @@ class CutoutSequence(object):
                     hdus.close()
 
         # self.fpCs = files
-        # print 'Done ...'
+        print 'Done ...'
 
     def create_raw_cutouts(self):
         """
@@ -526,7 +527,7 @@ class CutoutSequence(object):
 
         print 'Load each image and create cutout when possible (marked by \'*\' at the end)'
         # print 'In DS9 fpCs have East up, North right'
-        for i, ifname_cutout in enumerate(self.fpCs):
+        for i, ifname_cutout in enumerate(self.files):
 
             # Load the file
             hdulist = fits.open(ifname_cutout)
@@ -1491,24 +1492,24 @@ def plot_time_coverage(cutout_dates, opath):
     plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
 
 
-def write_cutout_summary(co):
+def write_cutout_sequence_summary(cs):
 
     summary = ''
     summary += 'SUMMARY\n'
-    summary += '\nSky coordinate: (RA, Dec) = ({:4f}, {:4f})'.format(*co.radec)
-    summary += '\n\nInitial number of covering frames: {}'.format(co.fields.count().max())
-    summary += '\nCo-added frames (left out for now): {}'.format(len(co.coadded))
-    summary += '\nNon-existing file: {}'.format(len(co.notfiles))
-    summary += '\nValid files to use for processing cutouts: {}'.format(len(co.fpCs))
-    summary += '\n\nCutout dimension (rows, cols) = ({}, {})'.format(*co.size)
-    summary += '\nPossible cutouts with this dimension: {}'.format(len(co.cutout_files))
-    summary += '\nFailed writings to disk: {}'.format(len(co.failed_writes))
+    summary += '\nSky coordinate: (RA, Dec) = ({:4f}, {:4f})'.format(*cs.radec)
+    summary += '\n\nInitial number of covering frames: {}'.format(cs.fields.count().max())
+    summary += '\nCo-added frames (left out for now): {}'.format(len(cs.coadded))
+    summary += '\nNon-existing file: {}'.format(len(cs.notfiles))
+    summary += '\nValid files to use for processing cutouts: {}'.format(len(cs.files))
+    summary += '\n\nCutout dimension (rows, cols) = ({}, {})'.format(*cs.size)
+    summary += '\nPossible cutouts with this dimension: {}'.format(len(cs.cutout_files))
+    summary += '\nFailed writings to disk: {}'.format(len(cs.failed_writes))
     # summary += '\n\nMean number of days between cutouts: {:.0f}d {:.3f}h'.format(
     #     cmdiff_mean // 1,
     #     (cmdiff_mean % 1) * 24
     # )
 
-    ofname_summary = os.path.join(co.path('dim'), 'summary.txt')
+    ofname_summary = os.path.join(cs.path('dim'), 'summary.txt')
     with open(ofname_summary, 'w+') as fsock:
         fsock.write(summary)
 
