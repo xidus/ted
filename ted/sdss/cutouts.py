@@ -263,6 +263,16 @@ class CutoutSequence(object):
 
             """
 
+    def clear(self):
+        """
+        Clears loaded and generated data variables
+
+        """
+        for key in dir(self):
+            if '__' not in key and 'cube_' in key:
+                print 'Clearing', key, '...'
+                delattr(self, key)
+
     # Service methods for self.initialise()
     # -------------------------------------
 
@@ -286,7 +296,7 @@ class CutoutSequence(object):
         cpaths['root'] = os.path.join(env.paths.get('cutouts'), self.size_str)
 
         # Define directory particular for this cutout sequence
-        cpaths['coord'] = os.path.join(env.paths.get('cutouts'), self.crd_str)
+        cpaths['coord'] = os.path.join(cpaths.get('root'), self.crd_str)
 
         # Define subdirectories within the directory
         # particular for this cutout sequence
@@ -860,7 +870,7 @@ class CutoutSequence(object):
 cd {fits}
 for f in *.gz; do
 STEM=$(basename $f .gz)
-gunzip -c "${{f}}" > {gunzip}/"${{STEM}}"
+/bin/gunzip -c "${{f}}" > {gunzip}/"${{STEM}}"
 done\
 '''.format(**cmd_kw)
 
@@ -879,6 +889,8 @@ done\
         # Need to be valid file that could have a cutout made out of it.
         template_frame = self.files[0]
 
+        # Not specifying complete path, since environment should be set
+        # on my own machine as well as on the image server.
         cmd_kw = dict(template=template_frame)
         cmd_wcsremap_fstr = '''\
 wcsremap \
