@@ -1114,6 +1114,7 @@ wcsremap \
         elif 'sigma' in kwargs:
             # Now we have the width of the filter
             sigma = kwargs.get('sigma')
+            radius = sigma * np.sqrt(2)
 
         else:
             print 'None of the required arguments were passed to the function.'
