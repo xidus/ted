@@ -110,10 +110,6 @@ class CutoutSequence(object):
         # Create empty dictionary for the background models (templates)
         self.bg_models = {}
 
-        # Set modes
-        self.initialised = False
-        self.loaded = False
-
     # The time consumer
     # -----------------
 
@@ -172,9 +168,6 @@ class CutoutSequence(object):
         # USe WCSREMAP to astrometrically register cutouts to the oldest cutout
         self.wcsremap() # index=0
 
-        # Set initialised mode
-        self.initialised = True
-
     # The memory hurdle
     # -----------------
 
@@ -202,14 +195,6 @@ class CutoutSequence(object):
 
         """
 
-        if not self.initialised:
-            print 'CutoutSequence not initialised ...'
-            if force or 'y' == raw_input('Do you wish to initialise? (y/N)'):
-                print 'Initialising CutoutSequence ...'
-                self.initialise()
-            else:
-                return None
-
         # Load data cube
         # self.load_cutouts(which='residual', pad=pad)
         self.load_registered_cutouts(pad=pad)
@@ -220,9 +205,6 @@ class CutoutSequence(object):
 
         # Residuals
         self.calculate_residuals(bg_model=bg_model)
-
-        # The data are now available for analysis.
-        self.loaded = True
 
     # Work horses
     # -----------
@@ -1820,6 +1802,8 @@ def plot_histogram_ranked_LoG(self):
         ofname_check_intensities = os.path.join(path_LoG, 'check_intensities_LoG.pdf')
         plt.savefig(ofname_check_intensities)
 
+# Control programs
+# ----------------
 
 def get_cutout_sequences():
     """
@@ -1868,6 +1852,14 @@ def create_cutout_data():
 
 
 def do_grid_search(N_folds=5):
+    """
+    Does N-fold grid search.
+
+    Status
+    ------
+    Testing
+
+    """
 
     css, targets = get_cutout_sequences()
 
@@ -1985,8 +1977,15 @@ def main():
     Managagement script to make only the needed steps.
     Keep a logfile of steps completed?
     Yes.
+    OR (done)
+    define modes in the CutoutSequence instance which can
+    be checked to see if a given step has been performed.
+      It is not as detailed as a log of every small step, though.
 
     Basically a dictionary with key = crd2path
+
+    In this dictionary there will be keys named after the function that ran,
+    and it will contain a timestamp and a list of created attributes as strings.
 
     And then do a complete cleanup, when needed?
     Yes
