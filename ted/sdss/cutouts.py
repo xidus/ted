@@ -110,6 +110,10 @@ class CutoutSequence(object):
         # Create empty dictionary for the background models (templates)
         self.bg_models = {}
 
+        # Define and build directory structure for this coordinate
+        # Creates self.cpaths
+        self.create_directories()
+
     # The time consumer
     # -----------------
 
@@ -134,10 +138,6 @@ class CutoutSequence(object):
         The registered cutouts can now be loaded into a datacube for analysis.
 
         """
-
-        # Define and build directory structure for this coordinate
-        # Creates self.cpaths
-        self.create_directories()
 
         # # Selection I
         # Get covering fields
