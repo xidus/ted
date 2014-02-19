@@ -1291,7 +1291,7 @@ def crd2str(radec):
     # print radec.flatten()
     # print '{:f}, {:f}'.format(*radec.flatten())
     # return '{:0>10.5f}__{:0>10.5f}'.format(*radec).replace('.', '_')
-    return '{:012.7f}__{:012.7f}'.format(*radec).replace('.', '_')
+    return '{:014.9f}__{:014.9f}'.format(*radec).replace('.', '_')
 
 
 def get_covering_fields(radec):
@@ -1842,7 +1842,9 @@ def get_cutout_sequences():
         targets.append(tlist.is_sn[i])
 
     # Check coordinate uniqueness
-    print len(coords), np.unique(coords).size
+    if len(coords) != np.unique(coords).size:
+        print len(coords), np.unique(coords).size
+        raise SystemExit
 
     return np.array(cutout_sequences), np.array(targets)
 
