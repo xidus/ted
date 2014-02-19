@@ -1127,7 +1127,7 @@ wcsremap \
 
         # For each image obtain LoG(x, y; sigma)
         self.cube_LoG = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.size[2]):
+        for i in range(self.cube_remap.shape[2]):
             self.cube_LoG[:, :, i] = gaussian_laplace(
                 self.cube_residual[:, :, i], sigma=sigma
             )
@@ -1182,7 +1182,7 @@ wcsremap \
         ]
 
         self.cube_minima_locs = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.size[2]):
+        for i in range(self.cube_remap.shape[2]):
             I_res = self.cube_LoG[:, :, i]
 
             # this may be too expensive for larger cutout sizes,
@@ -1220,7 +1220,7 @@ wcsremap \
         """
 
         self.cube_cut = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.size[2]):
+        for i in range(self.cube_remap.shape[2]):
 
             # Best way to threshold?
             # Initial idea (KSP agreed after discussing it with him)
@@ -1290,7 +1290,8 @@ def crd2str(radec):
     """
     # print radec.flatten()
     # print '{:f}, {:f}'.format(*radec.flatten())
-    return '{:0>10.5f}__{:0>10.5f}'.format(*radec).replace('.', '_')
+    # return '{:0>10.5f}__{:0>10.5f}'.format(*radec).replace('.', '_')
+    return '{:012.7f}__{:012.7f}'.format(*radec).replace('.', '_')
 
 
 def get_covering_fields(radec):
@@ -1826,6 +1827,7 @@ def get_cutout_sequences():
     params = dict(size=(101, 101))
 
     cutout_sequences = []
+    coords = []
     targets = []
     for i in range(tlist.shape[0]):
         # print '{: >3d}'.format(i)
@@ -1836,7 +1838,11 @@ def get_cutout_sequences():
             is_sn=tlist.is_sn[i]
         )
         cutout_sequences.append(CutoutSequence(**params))
+        coords.append(cutout_sequences[i].crd_str)
         targets.append(tlist.is_sn[i])
+
+    # Check coordinate uniqueness
+    print len(coords), np.unique(coords).size
 
     return np.array(cutout_sequences), np.array(targets)
 
