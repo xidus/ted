@@ -371,11 +371,21 @@ def build_tlist():
     import numpy as np
     import pandas as pd
 
-    snlist = pd.read_csv(env.files.get('snlist'), sep=';')
+    from ..parse import ra2deg, dec2deg
+
+    # snlist = pd.read_csv(env.files.get('snlist'), sep=';')
+    snid_sortable = lambda SDSS_id: 'SN{:0>5d}'.format(int(SDSS_id[2:]))
+    s2valornan = lambda s: s or np.nan
+    conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
+        redshift=s2valornan, Peak_MJD=s2valornan)
+    lkw = dict(sep=';', converters=conv)
+    snlist = pd.read_csv(env.files.get('snlist_1030'), **lkw)
     gxlist = pd.read_csv(env.files.get('gxlist'), sep=',')
 
     # print gxlist.info()
     # print gxlist.head(10)
+    print snlist.info()
+    print snlist.head(10)
 
     # How many needed in total
     N_sne = snlist.shape[0]
@@ -407,7 +417,9 @@ def build_tlist():
 
     # Collect and shuffle the lines, so that I only need to split
     # the data set N-fold, when using the data.
-    dataset = np.array([ra, dec, is_sn]).T
+    dataset = np.array([ra,
+                        dec,
+                        is_sn]).T
     # Do in-place shuffle
     """
     This is an in-place operation on a view of the original array.
@@ -416,6 +428,19 @@ def build_tlist():
     REF: https://stackoverflow.com/questions/20546419/shuffle-columns-of-an-array-with-numpy
     """
     np.random.shuffle(dataset)
+
+    if 0:
+        coords = np.array([])
+        # for i in range(dataset.shape[0]):
+        #     coords = np.append(coords, '{:014.9f}_{:014.9f}'.format(
+        #         dataset[i, 0], dataset[i, 1])
+        #     )
+        for i in range(snlist.shape[0]):
+            coords = np.append(coords, '{:014.9f}_{:014.9f}'.format(
+                snlist.Ra.values[i], snlist.Dec.values[i])
+            )
+        print np.unique(coords).size, np.unique(snlist.SDSS_id.values).size, np.unique(snlist.Peak_MJD.values).size
+        raise SystemExit
 
     # tlist = pd.DataFrame(data=dict(Ra=ra, Dec=dec, is_sn=is_sn))
     tlist = pd.DataFrame(
