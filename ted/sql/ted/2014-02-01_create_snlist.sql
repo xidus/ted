@@ -12,8 +12,8 @@ CREATE TABLE Supernovae (
     Ra          REAL        NOT NULL,
     Dec         REAL        NOT NULL,
     redshift    REAL        ,
-    Peak_MJD    REAL        ,
-    Flag        VARCHAR(5)  NOT NULL DEFAULT ''
+    Peak_MJD    REAL        --,
+--    Flag        VARCHAR(5)  NOT NULL DEFAULT ''
 );
 
 --    run     SMALLINT    NOT NULL,
