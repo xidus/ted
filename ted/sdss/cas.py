@@ -148,6 +148,8 @@ def create_galaxy_list():
     ifname = os.path.join(ipath, 'cu_gxlist.csv')
     if not os.path.isfile(ifname):
 
+        """This step takes ~40 minutes on my laptop."""
+
         ramin, ramax = fields.raMin.values, fields.raMax.values
         decmin, decmax = fields.decMin.values, fields.decMax.values
 
@@ -346,12 +348,71 @@ def create_galaxy_list():
 
     dcu_galaxies = cu_galaxies.iloc[dix]
 
+    # Step 3:
+    # -------
+    print 'Step 2 : Exclude coordinates that are too close to other non-events ...'
+
+    """
+    Rationale
+    ---------
+    When I discovered that I had not checked that the distance between the
+    galaxy coordinates themselves were not too close to essentially stay out
+    of each other's cutouts, I realised that I never made sure that I could
+    order them by observation date and then use only the first-observed object
+    (or it could be the same, but it would make no difference for my algorithm
+    to begin with), so that I could argue that I should keep the first one.
+        As it is (2014-02-26), I do not have any means to use observation
+    dates, since I do not have the luxury of starting over and begin with
+    Step 0. Also, More importantly, I do not have time to spend on finding out
+    how to obtain observation dates from the SDSS database.
+
+    As this is basically just a proof of concept, where I just need enough
+    coordinates that as far as the merged snlists are concerned do not have any
+    known transient events happening in them that are classified as SNe. There
+    does not seem to be any reason why I should not just choose arbitrarily
+    between two coordinates whose cutouts (101x101) will overlap.
+
+    Algorithm
+    ---------
+    1. I go through the list from the top.
+    2. For each coordinate I calculate the ditance to all other coordinates.
+    3. I get an array of the same length, containing the distances.
+    4. Entries with coordinates too close to be outside the given coordinate's
+       cutout `view` will be removed from the list.
+    5. The now potentially reduced list is used in the next step. Since we
+       start from the top, the previous coordinate entries will all be there in
+       the reduced list.
+    6. Increase the entry index and repeat from step 3. until the end of the
+       final entry is reached (no more remaining possibly too close coordinates
+       left).
+
+    """
+
+    i = 0
+    ddcu_galaxies = dcu_galaxies.copy()
+    while i < ddcu_galaxies.shape[0]:
+        if i and not i % 1000:
+            print 'i = {: >5d}'.format(i)
+        templist = ddcu_galaxies.copy()
+        entry = templist[i:i + 1]
+        dRa = entry.Ra.values[0] - templist.Ra.values
+        dDec = entry.Dec.values[0] - templist.Dec.values
+        dS = np.sqrt(dRa ** 2 + dDec ** 2)
+        dix = (dS > criteria_distance)
+        dix[i] = True
+        ddcu_galaxies = templist.iloc[dix].copy()
+        del templist
+        # Yikes :O !!! This turned out to be important :D
+        i += 1
+
+    print 'Final size of gxlist: {:,.0f}'.format(ddcu_galaxies.shape[0])
+
     # Finalise
     # --------
 
     print 'Step finalise : save the resulting list to disk.'
 
-    dcu_galaxies.to_csv(env.files.get('gxlist'), index=False, header=True)
+    ddcu_galaxies.to_csv(env.files.get('gxlist'), index=False, header=True)
 
 
 def plot_gxlist():
