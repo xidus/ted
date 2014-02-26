@@ -1224,7 +1224,11 @@ wcsremap \
 
             # Best way to threshold?
             # Initial idea (KSP agreed after discussing it with him)
-            t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
+            # t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
+            # A better way
+            imin = self.cube_remap[:, :, i].min()
+            imax = self.cube_remap[:, :, i].max()
+            t_cut = tau * (imax - imin)
             # thresholding i SIP course was done on max(image),
             # i.e. negative intensities do not influence the positive range of
             # values used to determine the intensity value of the threshold.
@@ -1234,7 +1238,7 @@ wcsremap \
             # Get thresholded binary field
             self.cube_cut[:, :, i] = (
                 self.cube_minima_locs * self.cube_remap[:, :, i]
-                ) > t_cut
+                - imin) > t_cut
 
     # def threshold_LoG_values(self, t_cut=-30):
 
@@ -1284,14 +1288,8 @@ def DEPRECATED_get_crd(ix=None, src='snlist'):
 
 
 def crd2str(radec):
-    """
-    Returns a unique string-representation of coordinate
-
-    """
-    # print radec.flatten()
-    # print '{:f}, {:f}'.format(*radec.flatten())
-    # return '{:0>10.5f}__{:0>10.5f}'.format(*radec).replace('.', '_')
-    return '{:014.9f}__{:014.9f}'.format(*radec).replace('.', '_')
+    """Returns a unique string-representation of coordinate"""
+    return '{:010.5f}__{:010.5f}'.format(*radec).replace('.', '_')
 
 
 def get_covering_fields(radec):
