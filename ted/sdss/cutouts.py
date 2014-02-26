@@ -147,7 +147,11 @@ class CutoutSequence(object):
         # Selection II
         # creates self.files,
         # the list of filenames from which to extract raw cutouts.
-        self.get_consistent_frames()
+        # self.get_consistent_frames()
+        # Since it sucks big time that I can not run TSOCKS properly on
+        # imagerserver[1-3], I am leaving out the steps that try to download
+        # missing or corrupted files.
+        self.get_consistent_frames(attempt_download=False)
 
         # Selection III
         # Selects frames for which a cutout can be made.
@@ -316,7 +320,7 @@ class CutoutSequence(object):
 
         self.fields = get_covering_fields(self.radec)
 
-    def get_consistent_frames(self, redownload=True):
+    def get_consistent_frames(self, attempt_download=True):
         """
         Check the consistency of each file.
 
