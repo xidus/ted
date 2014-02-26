@@ -142,6 +142,7 @@ class CutoutSequence(object):
         # # Selection I
         # Get covering fields
         # self.fields = get_covering_fields(self.radec)
+        print 'Getting covering fields ...'
         self.get_covering_fields()
 
         # Selection II
@@ -151,6 +152,7 @@ class CutoutSequence(object):
         # Since it sucks big time that I can not run TSOCKS properly on
         # imagerserver[1-3], I am leaving out the steps that try to download
         # missing or corrupted files.
+        print 'Getting consistent frames ...'
         self.get_consistent_frames(attempt_download=False)
 
         # Selection III
@@ -348,6 +350,9 @@ class CutoutSequence(object):
             field = self.fields.iloc[i:i + 1]
             filename = frame_path(field)
 
+            # 2014-02-26: from the output errors, some filenames appear to be missing the name of the file.
+            print '  +++===>>>[[[ {} ]]]'.format(filename)
+
             if field.run in (106, 206):
                 self.coadded.append(i)
                 # print 'CA', filename
@@ -368,7 +373,7 @@ class CutoutSequence(object):
             except IOError:
                 # print 'IO', filename
 
-                if not redownload:
+                if not attempt_download:
 
                     self.files.pop()
                     continue
