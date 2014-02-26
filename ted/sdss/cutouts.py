@@ -1825,7 +1825,6 @@ def get_cutout_sequences():
     params = dict(size=(101, 101))
 
     cutout_sequences = []
-    coords = []
     targets = []
     for i in range(tlist.shape[0]):
         # print '{: >3d}'.format(i)
@@ -1836,13 +1835,7 @@ def get_cutout_sequences():
             is_sn=tlist.is_sn[i]
         )
         cutout_sequences.append(CutoutSequence(**params))
-        coords.append(cutout_sequences[i].crd_str)
         targets.append(tlist.is_sn[i])
-
-    # Check coordinate uniqueness
-    if len(coords) != np.unique(coords).size:
-        print len(coords), np.unique(coords).size
-        raise SystemExit
 
     return np.array(cutout_sequences), np.array(targets)
 
