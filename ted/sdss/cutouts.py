@@ -350,7 +350,8 @@ class CutoutSequence(object):
             field = self.fields.iloc[i:i + 1]
             filename = frame_path(field)
 
-            # 2014-02-26: from the output errors, some filenames appear to be missing the name of the file.
+            # 2014-02-26: from the output errors, some filenames appear to be
+            # missing the name of the file.
             print '  +++===>>>[[[ {} ]]]'.format(filename)
 
             if field.run in (106, 206):
@@ -375,7 +376,12 @@ class CutoutSequence(object):
 
                 if not attempt_download:
 
-                    self.files.pop()
+                    try:
+                        self.files.pop()
+
+                    except IndexError:  # pop from empty list
+                        pass
+
                     continue
 
                 else:
@@ -1298,7 +1304,8 @@ def DEPRECATED_get_crd(ix=None, src='snlist'):
 
 def crd2str(radec):
     """Returns a unique string-representation of coordinate"""
-    return '{:010.5f}__{:010.5f}'.format(*radec).replace('.', '_')
+    # return '{:010.5f}__{:010.5f}'.format(*radec).replace('.', '_')
+    return '{:011.6f}__{:011.6f}'.format(*radec).replace('.', '_')
 
 
 def get_covering_fields(radec):
@@ -1835,6 +1842,7 @@ def get_cutout_sequences():
 
     cutout_sequences = []
     targets = []
+    coords = []
     for i in range(tlist.shape[0]):
         # print '{: >3d}'.format(i)
 
@@ -1845,6 +1853,10 @@ def get_cutout_sequences():
         )
         cutout_sequences.append(CutoutSequence(**params))
         targets.append(tlist.is_sn[i])
+        if not targets[-1]:
+            coords.append(cutout_sequences[-1].crd_str)
+
+    print len(coords), np.unique(coords).size
 
     return np.array(cutout_sequences), np.array(targets)
 
