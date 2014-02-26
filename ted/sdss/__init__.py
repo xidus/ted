@@ -126,19 +126,13 @@ Please add them manually first.'''
         print ('{: >10d} ' * len(names)).format(*counts)
         print ''
 
-    def snid_sortable(SDSS_id):
-        _id = int(SDSS_id[2:])
-        # print SDSS_id, _id
-        return 'SN{:0>5d}'.format(_id)
-
     # String to value or NaN (hence the name valornan)
+    snid_sortable = lambda SDSS_id: 'SN{:0>5d}'.format(int(SDSS_id[2:]))
     s2valornan = lambda s: s or np.nan
     conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
         redshift=s2valornan, Peak_MJD=s2valornan)
     df_left = pd.read_csv(fn_snlist_sdss_org, sep=';', converters=conv)
     df_right = pd.read_csv(fn_snlist_SNII_upd, sep=';', converters=conv)
-    # df_left = pd.read_csv(fn_snlist_sdss_org, sep=';', converters=conv, index_col='SDSS_id')
-    # df_right = pd.read_csv(fn_snlist_SNII_upd, sep=';', converters=conv, index_col='SDSS_id')
 
     SDSS_id_left = list(df_left.SDSS_id)
     SDSS_id_right = list(df_right.SDSS_id)
@@ -151,7 +145,6 @@ Please add them manually first.'''
     # raise SystemExit
     ncols = len(columns) - 1
     df = pd.DataFrame(columns=columns)
-    print df.describe()
     tests = [''] * 2 + [np.nan] * 4
     # raise SystemExit
 
@@ -200,15 +193,96 @@ Please add them manually first.'''
 
     df.sort_index(by='SDSS_id', ascending=True)
 
-    # Check if confirmed by IAUC, i.e. that it has an ID.
-    confirmed = (df['IAUC_id'].values != np.nan)
-    flags = np.zeros_like(df['IAUC_id'].values).astype(str)
-    flags[confirmed] = 'C'
-    flags[~confirmed] = ''
-    df['Flag'] = flags
+    """Check for duplicate coordinates"""
 
-    print 'Confirmed SNe (has IAUC ID):', confirmed.sum()
-    print 'Internally confirmed SNe:', (~confirmed).sum()
+    report = ''
+
+    # Check for duplicate coordinate pairs
+    coords = np.array([])
+    for i in range(df.shape[0]):
+        coords = np.append(coords, '{:014.9f}_{:014.9f}'.format(
+            df.Ra.values[i], df.Dec.values[i])
+        )
+    ucoords, indices = np.unique(coords, return_inverse=True)
+    report += 'Number of list entries:     {: >4d}\n'.format(df.shape[0])
+    report += 'Number of unique entries:   {: >4d}\n'.format(ucoords.size)
+    # print 'Number of unique entry IDs: {: >4d}'.format(np.unique(snlist.SDSS_id.values).size)
+
+    # `indices` is an array of the same length as `coords`
+    # An entry in `indices` is itself an index for an entry in `ucoords`,
+    # i.e. `coords[i]` is `ucoords[indices[i]]`, `coords.size == indices.size`
+    # Thus repeated entries in `indices` means that there were more than one
+    # entry in `coords` which held this value; in this case a coordinate pair.
+    duplicates = []
+    for ix in np.unique(indices):
+        if (indices == ix).sum() > 1:
+            # There is a duplicate of this coordinate
+            # Save the index for `ucoords`
+            duplicates.append(ix)
+
+    # Now we have the indices for the entries in `ucoords` whose values in
+    # `coords` appear more than once. Let's retrieve the corresponding indices
+    # for these values in `coords`.
+    coord_indices = []
+    for ix in duplicates:
+        report += '\n'
+        for i, uc in enumerate(ucoords[indices[indices == ix]]):
+            if i == 0:
+                # We only need to search for the indices of the duplicates
+                # from one of the duplicates.
+                coord_indices.append((coords == uc).nonzero()[0])
+            # Report the actual coordinate strings for evry duplicate so that a
+            # visual inspection can also verify that they are in fact congruent
+            report += '{}'.format(uc)
+
+    report += '\nIndices of `ucoords`: {}'.format(duplicates)
+    report += '\nIndices of `coords`: {}'.format(repr(coord_indices))
+    report += '\n'
+
+    report += 'Entries from snlist:'
+    for cices in coord_indices:
+        report += '\n'
+        report += '{}'.format(df.iloc[cices])
+
+    # Selection of the entry in the list which gets to stay.
+    # I choose the first occurrence, since the list is at this point already
+    # sorted after SDSS_id which increases with time.
+    # For this selection to be fair, the duplicate coordinates have to also
+    # refer to the same object.
+    # How do I know this?
+    # I looked at the output of the previous for-loop, and each pair of entries
+    # of the three duplicate coordinates had an estimated Modified Julian Date
+    # Peak time which were separated in time by an interval that is of the
+    # same order as the timespan in which a supernova is typically visible.
+    # It is interesting that the survey found at least two peak dates for what
+    # I, at least for now, assume is the same object. or two very closely
+    # located objects. I do not know what the odds of spotting two different
+    # events along the same line of sight and coming from two separate galaxies
+    # within this relatively short amount of time; and considering three such
+    # events within such a short list seems even less plausible.
+
+    # POP the last of the two (or in principle more) entries from the list,
+    # before saving it.
+    # OR simply let Pandas do ALL the above work and also remove the duplicates.
+    # report is still useful for the report, i.e. with the argument above.
+    df.drop_duplicates(cols=['Ra', 'Dec'], inplace=True)
+
+    with open(env.files.get('log_snlist'), 'w+') as fsock:
+        fsock.write(report)
+
+    if 0:
+        """Add flag"""
+
+        # ADDING A FLAG
+        # Check if confirmed by IAUC, i.e. that it has an ID.
+        confirmed = (df['IAUC_id'].values != np.nan)
+        flags = np.zeros_like(df['IAUC_id'].values).astype(str)
+        flags[confirmed] = 'C'
+        flags[~confirmed] = ''
+        df['Flag'] = flags
+
+        print 'Confirmed SNe (has IAUC ID):', confirmed.sum()
+        print 'Internally confirmed SNe:', (~confirmed).sum()
 
     df.to_csv(ofn_snlists_merged, sep=';', index=False, header=True)
 
@@ -239,9 +313,9 @@ def sql_fill_table_SNe():
 
         sql_insert = '''\
 INSERT INTO Supernovae
-    (SDSS_id, SN_type, IAUC_id, Ra, Dec, redshift, Peak_MJD, Flag)
+    (SDSS_id, SN_type, IAUC_id, Ra, Dec, redshift, Peak_MJD)
     VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?)
+    (?, ?, ?, ?, ?, ?, ?)
 '''
         # cur.executemany(sql_insert, df.values)
         for i, row in enumerate(df.values):

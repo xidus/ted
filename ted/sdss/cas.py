@@ -373,13 +373,15 @@ def build_tlist():
 
     from ..parse import ra2deg, dec2deg
 
-    # snlist = pd.read_csv(env.files.get('snlist'), sep=';')
-    snid_sortable = lambda SDSS_id: 'SN{:0>5d}'.format(int(SDSS_id[2:]))
-    s2valornan = lambda s: s or np.nan
-    conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
-        redshift=s2valornan, Peak_MJD=s2valornan)
-    lkw = dict(sep=';', converters=conv)
-    snlist = pd.read_csv(env.files.get('snlist_1030'), **lkw)
+    if 1:
+        snlist = pd.read_csv(env.files.get('snlist'), sep=';')
+    else:
+        snid_sortable = lambda SDSS_id: 'SN{:0>5d}'.format(int(SDSS_id[2:]))
+        s2valornan = lambda s: s or np.nan
+        conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
+            redshift=s2valornan, Peak_MJD=s2valornan)
+        lkw = dict(sep=';', converters=conv)
+        snlist = pd.read_csv(env.files.get('snlist_1030'), **lkw)
     gxlist = pd.read_csv(env.files.get('gxlist'), sep=',')
 
     # print gxlist.info()
@@ -439,7 +441,8 @@ def build_tlist():
             coords = np.append(coords, '{:014.9f}_{:014.9f}'.format(
                 snlist.Ra.values[i], snlist.Dec.values[i])
             )
-        print np.unique(coords).size, np.unique(snlist.SDSS_id.values).size, np.unique(snlist.Peak_MJD.values).size
+        ucoords, indices = np.unique(coords, return_inverse=True)
+        print ucoords.size, np.unique(snlist.SDSS_id.values).size, np.unique(snlist.Peak_MJD.values).size
         raise SystemExit
 
     # tlist = pd.DataFrame(data=dict(Ra=ra, Dec=dec, is_sn=is_sn))
@@ -451,6 +454,72 @@ def build_tlist():
     print tlist.head(10)
     tlist.to_csv(env.files.get('tlist'), index=False, header=True)
 
+
+###############################################################################
+def check_snlist():
+    """
+    Check for duplicates in snlist_1030
+
+    """
+    import numpy as np
+    import pandas as pd
+
+    from ..parse import ra2deg, dec2deg
+
+    # Converters
+    snid_sortable = lambda SDSS_id: 'SN{:0>5d}'.format(int(SDSS_id[2:]))
+    s2valornan = lambda s: s or np.nan
+
+    if 0:
+        ifname = env.files.get('snlist_1030')
+        conv = dict(SDSS_id=snid_sortable, Ra=ra2deg, Dec=dec2deg,
+            redshift=s2valornan, Peak_MJD=s2valornan)
+
+    else:
+        ifname = env.files.get('snlist')
+        conv = dict(SDSS_id=snid_sortable, redshift=s2valornan,
+                    Peak_MJD=s2valornan)
+
+    lkw = dict(sep=';', converters=conv)
+    snlist = pd.read_csv(ifname, **lkw)
+
+    # Check for duplicate coordinate pairs
+    coords = np.array([])
+    for i in range(snlist.shape[0]):
+        coords = np.append(coords, '{:014.9f}_{:014.9f}'.format(
+            snlist.Ra.values[i], snlist.Dec.values[i])
+        )
+    ucoords, indices = np.unique(coords, return_inverse=True)
+    print 'Number of list entries:     {: >4d}'.format(snlist.shape[0])
+    print 'Number of unique entries:   {: >4d}'.format(ucoords.size)
+    # print 'Number of unique entry IDs: {: >4d}'.format(np.unique(snlist.SDSS_id.values).size)
+
+    duplicates = []
+    for ix in np.unique(indices):
+        if (indices == ix).sum() > 1:
+            duplicates.append(ix)
+
+    if duplicates:
+
+        coord_indices = []
+        for ix in duplicates:
+            print ''
+            for i, uc in enumerate(ucoords[indices[indices == ix]]):
+                if i == 0:
+                    coord_indices.append((coords == uc).nonzero()[0])
+                print uc
+
+        print '\nIndices of the original list:', duplicates
+        print coord_indices
+        print ''
+
+        print 'Entries from snlist:'
+        for cices in coord_indices:
+            print
+            print snlist.iloc[cices]
+
+    else:
+        print 'No duplicates found ...'
 
 ###############################################################################
 def get_fields(ignore_saved=True):
