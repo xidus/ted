@@ -10,11 +10,12 @@ Create cutouts around a point in the sky.
 
 """
 
-from __future__ import unicode_literals
+# from __future__ import unicode_literals
 # from __future__ import print_function
 
 import os
 import datetime as dt
+# import collections as cs
 
 import numpy as np
 import pandas as pd
@@ -23,8 +24,10 @@ import matplotlib.pyplot as plt
 from astropy import wcs
 from astropy.io import fits
 import scipy.misc as misc
+import yaml
 
 # .. : ted
+from .. import msg
 from .. import env
 from .. import TEDError
 
@@ -112,7 +115,59 @@ class CutoutSequence(object):
 
         # Define and build directory structure for this coordinate
         # Creates self.cpaths
+        msg('Creating directories')
         self.create_directories()
+
+        # Save first entry to log files
+        self.log_init()
+
+    # Helpers
+    # -------
+
+    def logged(fun):
+        """A decorator for logging"""
+        def wrapped(self, *args, **kwargs):
+            if not self.step_finished(fun.func_name) == 'finished':
+                fun(self, *args, **kwargs)
+                self.log(step=fun.func_name, status='finished')
+        return wrapped
+
+    def log_init(self):
+        """Create log file to save the steps performed so far."""
+
+        # Default settings for the log file
+        self._fn_log = os.path.join(self.path('coord'), 'log.yaml')
+        self._log_kw = dict(default_flow_style=False, explicit_start=True)
+        self._log_kw.update(indent=2)
+
+        # Create the file, if it does not exist
+        if os.path.isfile(self._fn_log):
+            self.log_load()
+
+        else:
+            # self._log = cs.OrderedDict()
+            self._log = {}
+            self.log_save()
+
+    def log_load(self):
+        """Load the logged steps"""
+        with open(self._fn_log, 'r') as fsock:
+            # self._log = cs.OrderedDict(yaml.load(fsock.read()))
+            self._log = yaml.load(fsock.read())
+
+    def log_save(self):
+        """Overwrite last saved log file."""
+        with open(self._fn_log, 'w+') as fsock:
+            yaml.dump(self._log, stream=fsock, **self._log_kw)
+
+    def step_finished(self, step=None):
+        """Return status of the step"""
+        return self._log.get(step) == 'finished'
+
+    def log(self, step=None, status=None):
+        """Log method to be run at the end of a method."""
+        self._log.update({step: status})
+        self.log_save()
 
     # The time consumer
     # -----------------
@@ -139,10 +194,13 @@ class CutoutSequence(object):
 
         """
 
+        # Create raw cutout sequence
+        # --------------------------
+
         # # Selection I
         # Get covering fields
         # self.fields = get_covering_fields(self.radec)
-        print 'Getting covering fields ...'
+        msg('Getting covering fields')
         self.get_covering_fields()
 
         # Selection II
@@ -152,12 +210,13 @@ class CutoutSequence(object):
         # Since it sucks big time that I can not run TSOCKS properly on
         # imagerserver[1-3], I am leaving out the steps that try to download
         # missing or corrupted files.
-        print 'Getting consistent frames ...'
+        msg('Getting consistent frames')
         self.get_consistent_frames(attempt_download=False)
 
         # Selection III
         # Selects frames for which a cutout can be made.
         # Creates files on disk to be processed externally.
+        msg('Creating raw cutouts')
         self.create_raw_cutouts()
 
         # Cutout overview
@@ -169,9 +228,11 @@ class CutoutSequence(object):
         # -------------------
 
         # Gunzip raw cutouts
+        msg('GUNZIP')
         self.gunzip()
 
-        # USe WCSREMAP to astrometrically register cutouts to the oldest cutout
+        # Use WCSREMAP to astrometrically register cutouts to the oldest cutout
+        msg('WCSREMAP')
         self.wcsremap() # index=0
 
     # The memory hurdle
@@ -312,6 +373,7 @@ class CutoutSequence(object):
         """Shortcut to retrieving a path from self.cpaths."""
         return self.cpaths.get(key)
 
+    # @logged
     def get_covering_fields(self):
         """
         These fields form the basis input for the cutout algorithm which will
@@ -319,9 +381,9 @@ class CutoutSequence(object):
         the surrounding area that a cutout of the required size can be made.
 
         """
-
         self.fields = get_covering_fields(self.radec)
 
+    # @logged
     def get_consistent_frames(self, attempt_download=True):
         """
         Check the consistency of each file.
@@ -337,6 +399,10 @@ class CutoutSequence(object):
         self.files : list
             list of filenames for the covering and existing frames
 
+        Dependencies
+        ------------
+        self.get_covering_fields() needs to have been run.
+
         """
         print 'Get consistent frames ...'
 
@@ -346,6 +412,9 @@ class CutoutSequence(object):
         self.coadded = []
 
         for i in range(nframes):
+
+            use_file = False
+
             # print '{: >3d}'.format(i)
             field = self.fields.iloc[i:i + 1]
             filename = frame_path(field)
@@ -355,77 +424,104 @@ class CutoutSequence(object):
             print '  +++===>>>[[[ {} ]]]'.format(filename)
 
             if field.run in (106, 206):
+                """Just adds the index"""
                 self.coadded.append(i)
                 # print 'CA', filename
 
             elif not os.path.isfile(filename):
+                """Just adds the index"""
                 self.notfiles.append(i)
                 # print u'!E', filename
 
             else:
+                use_file = True
                 self.files.append(filename)
 
-            # Some of the files that have been downloaded may be corrupted.
-            # Try to load the file and catch any *IOError*s
-            try:
-                # print 'Checking file integrity ...'
-                hdus = fits.open(filename)
+            if use_file:
 
-            except IOError:
-                # print 'IO', filename
+                # Some of the files that have been downloaded may be corrupted.
+                # Try to load the file and catch any *IOError*s
 
-                if not attempt_download:
+                try:
+                    # print 'Checking file integrity ...'
+                    hdus = fits.open(filename)
 
-                    try:
-                        self.files.pop()
+                except IOError:
+                    # print 'IO', filename
 
-                    except IndexError:  # pop from empty list
-                        pass
+                    if not attempt_download:
 
-                    continue
-
-                else:
-
-                    # Get download function
-                    from .das import download_URI
-
-                    # Close file before redownloading
-                    if 'hdus' in dir():
-                        hdus.close()
-
-                    # print 'Trying to (re-)download ...'
-                    URI = frame_path(field, local=False)
-                    http_status, URI_, filename_ = download_URI((URI, filename))
-
-                    if http_status is 200:
-                        # print 'File was downloaded ...'
+                        """
+                        Try to pop from the list
+                        If list is empty, and IndexError will be thrown.
+                        Ignore this error.
+                        """
 
                         try:
-                            # print 'Checking file integrity ...'
-                            hdus = fits.open(filename)
-
-                        except IOError:
-                            # print 'Oh no! Something went wrong again. Skipping file for now ...'
                             self.files.pop()
-                            continue
 
-                        finally:
-                            if 'hdus' in dir():
-                                hdus.close()
+                        except IndexError:  # pop from empty list
+                            pass
 
-                    else:
-                        # print 'Response status code:', http_status
-                        # print 'Skipping file for now ...'
-                        self.files.pop()
                         continue
 
-            finally:
-                if 'hdus' in dir():
-                    hdus.close()
+                    else:
+
+                        # Get download function
+                        from .das import download_URI
+
+                        # Close file before redownloading
+                        if 'hdus' in dir():
+                            hdus.close()
+
+                        # print 'Trying to (re-)download ...'
+                        URI = frame_path(field, local=False)
+                        http_status, URI_, filename_ = download_URI((URI, filename))
+
+                        if http_status is 200:
+                            # print 'File was downloaded ...'
+
+                            try:
+                                # print 'Checking file integrity ...'
+                                hdus = fits.open(filename)
+
+                            except IOError:
+
+                                # print 'Oh no! Something went wrong again. \
+                                #     Skipping file for now ...'
+                                try:
+                                    self.files.pop()
+
+                                except IndexError:
+                                    pass
+
+                                continue
+
+                            finally:
+                                if 'hdus' in dir():
+                                    hdus.close()
+
+                        else:
+
+                            # print 'Response status code:', http_status
+                            # print 'Skipping file for now ...'
+
+                            try:
+                                self.files.pop()
+
+                            except IndexError:  # pop from empty list
+                                pass
+
+                            continue
+
+                finally:
+                    if 'hdus' in dir():
+                        hdus.close()
 
         # self.fpCs = files
         print 'Done ...'
 
+    @logged
     def create_raw_cutouts(self):
         """
         Cutout algorithm
@@ -451,6 +547,11 @@ class CutoutSequence(object):
         This report is saved as text, but an .HTML document is also
         created in the png directory, so that all the output cutouts
         and the stats can be viewd in one single document.
+
+
+        Dependencies
+        ------------
+        self.get_consistent_frames() needs to have been run before this step.
 
         """
 
@@ -846,6 +947,7 @@ class CutoutSequence(object):
 
     ### Image processing and analysis on cutouts for the given coordinate
 
+    @logged
     def gunzip(self):
 
         # Gunzip
@@ -874,6 +976,7 @@ done\
         print(cmd_gunzip)
         os.system(cmd_gunzip)
 
+    @logged
     def wcsremap(self):
 
         # WCSREMAP
@@ -884,7 +987,7 @@ done\
 
         """FIXME"""
         # Need to be valid file that could have a cutout made out of it.
-        template_frame = self.files[0]
+        template_frame = files[0]
 
         # Not specifying complete path, since environment should be set
         # on my own machine as well as on the image server.
@@ -907,6 +1010,8 @@ wcsremap \
                 print ''
             fname = os.path.basename(ifname)
             ofname = os.path.join(self.path('wcsremap'), fname)
+            # print ifname
+            # print ofname
             cmd_kw.update(ifname=ifname, ofname=ofname)
             cmd_wcsremap = cmd_wcsremap_fstr.format(**cmd_kw)
 
@@ -1137,8 +1242,8 @@ wcsremap \
 
         from scipy.ndimage import gaussian_laplace
 
-        print 'width = {: >.2f} px =>'.format(radius)
-        print 'sigma = {: >.2f} px'.format(sigma)
+        msg('width (radius) = {: >.2f} px => sigma = {: >.2f} px'.format(
+            radius, sigma))
 
         # For each image obtain LoG(x, y; sigma)
         self.cube_LoG = np.zeros_like(self.cube_remap)
@@ -1202,6 +1307,7 @@ wcsremap \
 
             # this may be too expensive for larger cutout sizes,
             # but I did not have time to fiddle around with indices.
+            # NOTE: np.pad() can not take unicode values for e.g. 'wrap'
             I_res_3x3 = np.pad(I_res, (pad_y, pad_x), 'wrap')
 
             # Create matrix for each offset direction
@@ -1251,9 +1357,18 @@ wcsremap \
             # t_cut = tau * (self.cube_remap[:].max())
 
             # Get thresholded binary field
-            self.cube_cut[:, :, i] = (
-                self.cube_minima_locs * self.cube_remap[:, :, i]
-                - imin) > t_cut
+
+            # Shortcut
+            img = self.cube_minima_locs[:, :, i]
+
+            # Keep only entries where maxima were found
+            img *= self.cube_remap[:, :, i]
+
+            # Subtract the minimum value of the complete image
+            img -= imin
+
+            # Save boolean matrix where True means that a signal was found.
+            self.cube_cut[:, :, i] = (img > t_cut)
 
     # def threshold_LoG_values(self, t_cut=-30):
 
@@ -1351,6 +1466,11 @@ def plot_covering(radec, fields, opath):
 
     """
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Get indices for those fields that have RA \in [300; 360]
     subtract_ix = fields.raMax > ra_max
 
@@ -1418,6 +1538,11 @@ def plot_possible_cutouts(pxmax, opath):
         # cutout_overview()
     """
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # How many cutouts of a given pixel side length can be made
     # out of the covering frames of the given coordinate?
 
@@ -1451,6 +1576,11 @@ def plot_possible_cutouts(pxmax, opath):
 
 def plot_pixel_indices(co):
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     pkw = dict(ls='none', marker='o', ms=12, mec='None', alpha=.8)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15., 15. * 1489. / 2048. / 2))
@@ -1474,10 +1604,15 @@ def plot_pixel_indices(co):
 
 def plot_time_coverage(cutout_dates, opath):
 
+    from mplconf import mplrc
+    # from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Get matplotlib dates for the timeline
     cutout_mdates = mpl.dates.date2num(sorted(cutout_dates))
     cutout_mdates_diff = cutout_mdates[1:] - cutout_mdates[:-1]
-    cmdiff_mean = cutout_mdates_diff.mean()
+    # cmdiff_mean = cutout_mdates_diff.mean()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15., 4))
 
@@ -1526,10 +1661,16 @@ def write_cutout_sequence_summary(cs):
     print summary
 
 
-def plot_background_models(self):
+def plot_background_models(co):
+
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Set common vmin and vmax
     vmin = 0.
-    vmax = np.max([self.template_median.max(), self.template_mean.max()])
+    vmax = np.max([co.template_median.max(), co.template_mean.max()])
     print vmax, np.log10(vmax)
 
     # Choose overall colour map
@@ -1538,7 +1679,7 @@ def plot_background_models(self):
     # extent : None | (left, right, bottom, top)
     # default : assigns zero-based row, column indices
     #           to the `x`, `y` centers of the pixels
-    extent = [0, cube_shape[0] - 1, 0, cube_shape[1] - 1]
+    extent = [0, co.cube_shape[0] - 1, 0, co.cube_shape[1] - 1]
 
     imkw = dict(cmap=cmap, interpolation='nearest')
     imkw.update(aspect='equal')  # , origin='lower')
@@ -1578,10 +1719,16 @@ def plot_background_models(self):
             ax.plot(padx, pady)
 
     fig.tight_layout()
-    plt.savefig(os.path.join(self.path('dim'), 'background_templates.pdf'))
+    plt.savefig(os.path.join(co.path('dim'), 'background_templates.pdf'))
 
 
-def plot_residual_sample(self):
+def plot_residual_sample(cs):
+
+    from mplconf import mplrc
+    # from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Show a sample of difference images
 
     # Offset to start from
@@ -1590,7 +1737,7 @@ def plot_residual_sample(self):
 
     # Use mask when plotting residuals
     # cube_res = np.ma.masked_where(cutout_mask_3D, cube_residual)
-    cube_res = cube_residual
+    cube_res = cs.cube_residual
 
     vmin = cube_res[:, :, offset:offset + 4].min()
     vmax = cube_res[:, :, offset:offset + 4].max()
@@ -1617,11 +1764,17 @@ def plot_residual_sample(self):
 
     fig.tight_layout()
 
-    ofname_check_residual = os.path.join(path_LoG, 'check_residual.pdf')
+    ofname_check_residual = os.path.join(cs.path('results'), 'check_residual.pdf')
     plt.savefig(ofname_check_residual)
 
 
 def plot_LoG_samples(self):
+
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Plot a couple of LoG-filtered images to check if filter size is reasonable (clear spot when SN present)
 
     # Also plot them as 3D surfaces to get a better feel for the toplogy of the the LoG-filtered difference images
@@ -1702,6 +1855,11 @@ def plot_LoG_samples(self):
 
 def plot_detection_sample(self):
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Plot I_min
 
     cmap = mpl.cm.binary
@@ -1735,6 +1893,11 @@ def plot_detection_sample(self):
 
 def plot_intensity_histogram(self):
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # Find a suitable threshold
 
     # Where are the True entries?
@@ -1764,6 +1927,11 @@ def plot_intensity_histogram(self):
 
 def plot_histogram_LoG(self):
 
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
+
     # How are the LoG pixel values distributed?
 
     LoG = cube_LoG[:, :, cut_ix]
@@ -1787,6 +1955,11 @@ def plot_histogram_LoG(self):
 
 
 def plot_histogram_ranked_LoG(self):
+
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    mplrc('publish_digital')
 
     # How are the relative changes in pixel intensity of the ranked and sorted LoG values distributed?
 
@@ -1842,7 +2015,7 @@ def get_cutout_sequences():
 
     cutout_sequences = []
     targets = []
-    coords = []
+    # coords = []
     for i in range(tlist.shape[0]):
         # print '{: >3d}'.format(i)
 
@@ -1853,10 +2026,10 @@ def get_cutout_sequences():
         )
         cutout_sequences.append(CutoutSequence(**params))
         targets.append(tlist.is_sn[i])
-        if not targets[-1]:
-            coords.append(cutout_sequences[-1].crd_str)
+        # if not targets[-1]:
+        #     coords.append(cutout_sequences[-1].crd_str)
 
-    print len(coords), np.unique(coords).size
+    # print len(coords), np.unique(coords).size
 
     return np.array(cutout_sequences), np.array(targets)
 
@@ -1886,27 +2059,37 @@ def do_grid_search(N_folds=5):
 
     # Create training and test data sets
     N_css = css.size
-    N_items = N_css / N_folds
+    N_items = N_css / N_folds # Assumes that N_css % N_folds == 0
 
     # 1-fold CV to begin with
+
+    # Select TEST data data and labels
     css_test = css[:N_items]
     targets_test = targets[:N_items]
 
+    # Select TRAINING data data and labels
     css_train = css[N_items:]
     targets_train = targets[N_items:]
 
     # Define hyper-parameter space
     N_sigmas = 3
     N_taus = 3
+
+    # Calculate scales based in pixel radii
     radii = np.linspace(5, 7, N_sigmas)
     # sigmas = np.linspace(, N_sigmas)
     sigmas = radii / np.sqrt(2)
+
+    # Set relative thresholds
     taus = np.linspace(.50, .70, N_taus)
 
     # Cube of predictions
     # N_sigmas x N_taus
     N_train = N_css - N_items
     cube_predict = np.zeros((N_sigmas, N_taus, N_train)).astype(bool)
+
+    print '\nNumber of training samples:', N_train
+    print 'Number of test samples:', N_items, '\n'
 
     """
     For each cutout sequence in the training set,
@@ -1917,13 +2100,18 @@ def do_grid_search(N_folds=5):
 
     """
 
+    msg('Training')
+
     # Load and setup the data for all the cutouts
     for k in range(N_train):
+
+        msg('CutoutSequence No. {:d}'.format(k + 1).upper())
 
         # Select the training data point (the cutout sequence)
         cs = css_train[k]
 
         # Load registered frames and get residuals using <bg_model>
+        msg('Loading')
         cs.load(pad=10, bg_model='median')
 
         # Grid search
@@ -1933,20 +2121,37 @@ def do_grid_search(N_folds=5):
         for i in range(N_sigmas):
             # Blobs
             # No need to perform LoG every time I change between thresholds
-            cs.calculate_LoG(sigma=sigmas[i])
+            sigma = sigmas[i]
+            msg('Sigma: {:.2f}'.format(sigma))
+            msg('LoG')
+            cs.calculate_LoG(sigma=sigma)
+            msg('Neighbours')
             cs.compare_neighbours()
 
             # Threshold values
             for j in range(N_taus):
-                cs.threshold_intensities(tau=taus[j])
 
-                # Save the resulting prediction
+                tau = taus[j]
+                msg('Tau: {:.2f}'.format(tau))
+
+                cs.threshold_intensities(tau=tau)
+
+                # Save the resulting prediction (a single boolean value)
+                # into the cube of predictions
                 cube_predict[i, j, k] = cs.is_transient()
 
     # Training accuracy
     # N_sigmas x N_taus
     # ^ : XOR
-    accuracies = (cube_predict ^ targets_train[None, None, :]).sum(axis=2) / N_train
+    accuracies = (
+        (
+            # cube_predict ^ targets_train[None, None, :]
+            cube_predict == targets_train[None, None, :]
+            # Sum along the cutout-sequence axis to
+            # count how many correct guesses (one for each CS)
+            # there were for a given sigma (row) and tau (col)
+        ).sum(axis=2).astype(float) / N_train
+    )
 
     # Get indices of the maximum
     ii, jj = np.unravel_index(accuracies.argmax(), (N_sigmas, N_taus))
@@ -1954,8 +2159,8 @@ def do_grid_search(N_folds=5):
     max_entries = (accuracies == accuracies[ii, jj])
     N_max_entries = max_entries.sum()
     if N_max_entries > 1:
-        print 'More than one best hyper-parameter combination.'
-        # print max_entries.nonzero()
+        msg('More than one best hyper-parameter combination.')
+        print max_entries.nonzero()
 
     """
     For the test data, there will be only a vector of predictions,
@@ -1978,12 +2183,13 @@ def do_grid_search(N_folds=5):
         vec_predict[i] = cs.is_transient()
 
     # Accuracy is a scalar, since we sum over the only dimension
-    accuracy = (vec_predict ^ targets_test).sum() / N_items
+    # accuracy = (vec_predict ^ targets_test).sum() / N_items
+    accuracy = (vec_predict == targets_test).sum().astype(float) / N_items
 
     # Save results
     ofname_training = os.path.join(cs.path('root'), 'accuracies.csv')
     with open(ofname_training, 'w+') as fsock:
-        for row in accuracies:
+        for row in accuracies.astype(str):
             fsock.write(','.join(row) + '\n')
 
     ofname_test = os.path.join(cs.path('root'), 'accuracy_test')
