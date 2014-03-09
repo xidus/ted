@@ -517,6 +517,34 @@ def build_tlist():
 
 
 ###############################################################################
+def build_tlist_sample(N=5):
+    """
+    Build *SAMPLE* event data set and save it as a file.
+
+    """
+    import numpy as np
+    import pandas as pd
+
+    snlist = pd.read_csv(env.files.get('snlist'), sep=';')
+
+    ra = snlist.Ra.values[:N]
+    dec = snlist.Dec.values[:N]
+    is_sn = np.ones(N).astype(bool)
+
+    dataset = np.array([ra,
+                        dec,
+                        is_sn]).T
+
+    tlist = pd.DataFrame(
+        data=dataset,
+        columns=['Ra', 'Dec', 'is_sn']
+    )
+    print tlist.info()
+    print tlist.head(N)
+    tlist.to_csv(env.files.get('tlist'), index=False, header=True)
+
+
+###############################################################################
 def check_snlist():
     """
     Check for duplicates in snlist_1030
