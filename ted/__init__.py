@@ -85,6 +85,15 @@ _pkg_home_dir = os.path.dirname(os.path.realpath(__file__))
 # print repr(env.paths.get('sql'))
 
 
+def msg(istr, width=78, char='-'):
+    if len(char) > 1: char = char[:1]
+    width_left = max(0, width - len(istr))
+    padding = char * max(0, width_left // 2 - 1)
+    ostr = '{padding} {istr} {padding}'.format(padding=padding, istr=istr)
+    while len(ostr) != width:
+        ostr += char[:1]
+    print '\n' + ostr + '\n'
+
 
 class Environment(object):
     """Looks for an environment-configuration file and loads the paths."""
