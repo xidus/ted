@@ -622,13 +622,12 @@ def check_tlist():
     import numpy as np
     import pandas as pd
 
-    import matplotlib.pyplot as plt
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
     ifname = env.files.get('tlist')
-    ofname = os.path.join(env.paths.get('data'), 'tlist_nfieldrecords.pdf')
+    ofname = os.path.join(
+            env.paths.get('data'),
+            'tlist_nfieldrecords.csv'
+        )
+
     tlist = pd.read_csv(ifname)
 
     sn_fields = []
@@ -645,14 +644,29 @@ def check_tlist():
             print 'GX',
         print '- Fields: {: >3d}'.format(n_fields)
 
-    mplrc('publish_digital')
-    fig, ax = plt.subplots(figsize=(12.5, 4))
-    ax.hist(sn_fields, bins=100)
-    ax.hist(gx_fields, bins=100)
-    ax.set_xlabel(rmath('Number of fields for a coordinate'))
-    ax.set_ylabel(rmath('Counts'))
-    fig.tight_layout()
-    plt.savefig(ofname)
+    data = np.array([sn_fields, gx_fields]).T
+    names = ['SN', 'GX']
+    df = pd.DataFrame(data=data, columns=names)
+    df.to_csv(ofname, index=False, header=True)
+
+    if 0:
+        import matplotlib.pyplot as plt
+
+        from mplconf import mplrc
+        from mplconf import rmath
+
+        mplrc('publish_digital')
+        fig, ax = plt.subplots(figsize=(12.5, 4))
+        ax.hist(sn_fields, bins=100)
+        ax.hist(gx_fields, bins=100)
+        ax.set_xlabel(rmath('Number of fields for a coordinate'))
+        ax.set_ylabel(rmath('Counts'))
+        fig.tight_layout()
+        ofname_fig = os.path.join(
+            env.paths.get('data'),
+            'tlist_nfieldrecords.pdf'
+        )
+        plt.savefig(ofname_fig)
 
 ###############################################################################
 def get_fields(ignore_saved=True):
