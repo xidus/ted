@@ -634,6 +634,7 @@ def check_tlist():
     sn_fields = []
     gx_fields = []
     for i in range(tlist.shape[0]):
+        print '{: >4d} -'.format(i),
         Ra, Dec, is_sn = tlist.iloc[i]
         n_fields = get_covering_fields(np.array([Ra, Dec])[None, :]).shape[0]
         if is_sn:
@@ -642,7 +643,7 @@ def check_tlist():
         else:
             gx_fields.append(n_fields)
             print 'GX',
-        print '- Fields:', n_fields
+        print '- Fields: {: >3d}'.format(n_fields)
 
     mplrc('publish_digital')
     fig, ax = plt.subplots(figsize=(12.5, 4))
