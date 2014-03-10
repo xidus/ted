@@ -623,11 +623,6 @@ def check_tlist():
     import pandas as pd
 
     ifname = env.files.get('tlist')
-    ofname = os.path.join(
-            env.paths.get('data'),
-            'tlist_nfieldrecords.csv'
-        )
-
     tlist = pd.read_csv(ifname)
 
     sn_fields = []
@@ -644,39 +639,13 @@ def check_tlist():
             print 'GX',
         print '- Fields: {: >3d}'.format(n_fields)
 
-    data = np.array([sn_fields, gx_fields]).T
-    names = ['SN', 'GX']
-    if 0:
-        # Don't know why, but this fails during runtime
-        # Traceback
-        """
-        ERROR: ValueError: Shape of passed values is (1, 2), indices imply (2, 2) [pandas.core.internals]
-        Traceback (most recent call last):
-          File "./main.py", line 222, in <module>
-            main(*sys.argv[1:])
-          File "./main.py", line 161, in main
-            ted.sdss.cas.check_tlist()
-          File "/home/zpq522/git/ted/ted/sdss/cas.py", line 649, in check_tlist
-            df = pd.DataFrame(data=data, columns=names)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/pandas/core/frame.py", line 415, in __init__
-            copy=copy)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/pandas/core/frame.py", line 561, in _init_ndarray
-            return create_block_manager_from_blocks([ values.T ], [ columns, index ])
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/pandas/core/internals.py", line 2234, in create_block_manager_from_blocks
-            construction_error(tot_items,blocks[0].shape[1:],axes)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/pandas/core/internals.py", line 2216, in construction_error
-            tuple(map(int, [len(ax) for ax in axes]))))
-        ValueError: Shape of passed values is (1, 2), indices imply (2, 2)
-        """
-        df = pd.DataFrame(data=data, columns=names)
-        df.to_csv(ofname, index=False, header=True)
-
-    else:
+    for data, name in zip([sn_fields, gx_fields], ['SN', 'GX']):
+        ofname = os.path.join(
+            env.paths.get('data'),
+            'nfieldrecords_{}.csv'.format(name)
+        )
         with open(ofname, 'w+') as fsock:
-            fstr = '{},{}\n'
-            fsock.write(fstr.format(*names))
-            for row in data:
-                fsock.write(fstr.format(*row))
+            fsock.write('\n'.join(data))
 
     if 0:
         import matplotlib.pyplot as plt
