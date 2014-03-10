@@ -383,6 +383,10 @@ class CutoutSequence(object):
         """
         self.fields = get_covering_fields(self.radec)
 
+        msg('Found {:d} fields that cover coordinate {}'.format(
+            self.fields.shape[0], self.crd_str)
+        )
+
     # @logged
     def get_consistent_frames(self, attempt_download=True):
         """
@@ -404,7 +408,7 @@ class CutoutSequence(object):
         self.get_covering_fields() needs to have been run.
 
         """
-        print 'Get consistent frames ...'
+        # print 'Get consistent frames ...'
 
         nframes = self.fields.shape[0]
         self.files = []
@@ -421,7 +425,7 @@ class CutoutSequence(object):
 
             # 2014-02-26: from the output errors, some filenames appear to be
             # missing the name of the file.
-            print '  +++===>>>[[[ {} ]]]'.format(filename)
+            # print '  +++===>>>[[[ {} ]]]'.format(filename)
 
             if field.run in (106, 206):
                 """Just adds the index"""
@@ -519,7 +523,11 @@ class CutoutSequence(object):
                         hdus.close()
 
         # self.fpCs = files
-        print 'Done ...'
+        # print 'Done ...'
+
+        msg('Of {:d} covering fields, {:d} are valid FITS files'.format(
+                nframes, len(self.files))
+        )
 
     @logged
     def create_raw_cutouts(self):
@@ -932,6 +940,8 @@ class CutoutSequence(object):
         # Summary
         # -------
 
+        msg('Succesfully created {:d} cutouts'.format(len(cutout_files)))
+
         # This is what I need for cutout_overview()
         # self.files_indices = files_indices
         # self.cutout_files = cutout_files
@@ -1017,6 +1027,8 @@ wcsremap \
 
             # print(cmd_wcsremap)
             os.system(cmd_wcsremap)
+
+        print ''
 
     # Service methods for loading and initialising the data for the analysis
     # ----------------------------------------------------------------------
@@ -2042,6 +2054,8 @@ def create_cutout_data():
     css, targets = get_cutout_sequences()
     for i, cs in enumerate(css):
         # print '{: >3d}'.format(i)
+        msg('', pad=' ')
+        msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
         cs.initialise()
 
 
