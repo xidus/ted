@@ -19,6 +19,7 @@ import time
 # Maybe I should create a wrapper or use socksipy to have all connections use the proxy server.
 import mechanize
 
+# .. : ted
 from .. import env
 from ..time import format_HHMMSS_diff
 from . import load_SNe_candidate_list
@@ -609,6 +610,45 @@ def check_snlist():
 
     else:
         print 'No duplicates found ...'
+
+###############################################################################
+def check_tlist():
+    """
+    For each entry in `tlist.csv`, find out how many fields cover it.
+
+    """
+    from .cutouts import get_covering_fields
+
+    import numpy as np
+    import pandas as pd
+
+    import matplotlib.pyplot as plt
+
+    from mplconf import mplrc
+    from mplconf import rmath
+
+    ifname = env.files.get('tlist')
+    ofname = os.path.join(env.paths.get('data'), 'tlist_nfieldrecords.pdf')
+    tlist = pd.read_csv(ifname)
+
+    fields = []
+    for i in range(tlist.shape[0]):
+        Ra, Dec, is_sn = tlist.iloc[i]
+        n_fields = get_covering_fields(np.array([Ra, Dec])[None, :]).shape[0]
+        if is_sn:
+            print 'SN',
+        else:
+            print 'GX',
+        print '- Fields:', n_fields
+        fields.append(n_fields)
+
+    mplrc('publish_digital')
+    fig, ax = plt.subplots(figsize=(12.5, 4))
+    ax.hist(fields, bins=100)
+    ax.set_xlabel(rmath('Number of fields for a coordinate'))
+    ax.set_ylabel(rmath('Counts'))
+    fig.tight_layout()
+    plt.savefig(ofname)
 
 ###############################################################################
 def get_fields(ignore_saved=True):
