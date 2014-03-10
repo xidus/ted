@@ -351,7 +351,7 @@ def create_galaxy_list():
 
     # Step 3:
     # -------
-    print 'Step 2 : Exclude coordinates that are too close to other non-events ...'
+    print 'Step 3 : Exclude coordinates that are too close to other non-events ...'
 
     """
     Rationale
@@ -376,7 +376,7 @@ def create_galaxy_list():
     Algorithm
     ---------
     1. I go through the list from the top.
-    2. For each coordinate I calculate the ditance to all other coordinates.
+    2. For each coordinate I calculate the distance to all other coordinates.
     3. I get an array of the same length, containing the distances.
     4. Entries with coordinates too close to be outside the given coordinate's
        cutout `view` will be removed from the list.
@@ -406,7 +406,24 @@ def create_galaxy_list():
         # Yikes :O !!! This turned out to be important :D
         i += 1
 
-    print 'Final size of gxlist: {:,.0f}'.format(ddcu_galaxies.shape[0])
+    # print 'Final size of gxlist: {:,.0f}'.format(ddcu_galaxies.shape[0])
+
+    # Step 4:
+    # -------
+    print 'Step 4 : Exclude coordinates that are covered by too few fields ...'
+
+    """
+    This was determined from the coordinates that were in the first tlist
+    made before this step, where I discovered that some of the choden coordintes
+    had as little as 1 field covering it. With fewer fields covering, the chance
+    of getting a number of cutouts in a sequence that matches the average number of cutouts
+    for the coordinates in snlist is smaller. There could be a bias here.
+    """
+    MIN_NUMBER_OF_FIELDS = 50  # ?
+    # Check if enough covering fields
+    # If not enough, exclude the coordinate.
+
+    # print 'Final size of gxlist: {:,.0f}'.format(ddcu_galaxies.shape[0])
 
     # Finalise
     # --------
@@ -645,7 +662,7 @@ def check_tlist():
             'nfieldrecords_{}.csv'.format(name)
         )
         with open(ofname, 'w+') as fsock:
-            fsock.write('\n'.join(data))
+            fsock.write('\n'.join(np.array(data).astype(str)))
 
     if 0:
         import matplotlib.pyplot as plt
