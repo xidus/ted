@@ -631,20 +631,23 @@ def check_tlist():
     ofname = os.path.join(env.paths.get('data'), 'tlist_nfieldrecords.pdf')
     tlist = pd.read_csv(ifname)
 
-    fields = []
+    sn_fields = []
+    gx_fields = []
     for i in range(tlist.shape[0]):
         Ra, Dec, is_sn = tlist.iloc[i]
         n_fields = get_covering_fields(np.array([Ra, Dec])[None, :]).shape[0]
         if is_sn:
+            sn_fields.append(n_fields)
             print 'SN',
         else:
+            gx_fields.append(n_fields)
             print 'GX',
         print '- Fields:', n_fields
-        fields.append(n_fields)
 
     mplrc('publish_digital')
     fig, ax = plt.subplots(figsize=(12.5, 4))
-    ax.hist(fields, bins=100)
+    ax.hist(sn_fields, bins=100)
+    ax.hist(gx_fields, bins=100)
     ax.set_xlabel(rmath('Number of fields for a coordinate'))
     ax.set_ylabel(rmath('Counts'))
     fig.tight_layout()
