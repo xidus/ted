@@ -903,7 +903,7 @@ class CutoutSequence(object):
 
         ofname_pxmax = os.path.join(opath, 'pxmax.dat')
         with open(ofname_pxmax, 'w+') as fsock:
-            fsock.write('\n'.join(pxmax))
+            fsock.write('\n'.join(pxmax.astype(str)))
 
         msg('Creating plots for visual inspection')
 
