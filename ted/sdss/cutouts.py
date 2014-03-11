@@ -907,8 +907,19 @@ class CutoutSequence(object):
         msg('Creating plots for visual inspection')
 
         # Create plots for visual inspection
-        plot_time_coverage(cutout_dates, opath)
-        plot_possible_cutouts(pxmax, opath)
+        """
+        This can not happen during cutout-creation time, since the job crashes
+        when it is run through Office Grid.
+
+        Error
+        -----
+        <a previous error>
+        Tried to solve <a previous error> by writing `Display=:0.0`
+        before the command that I run. This gives me the following error:
+         : cannot connect to X server :0.0
+        """
+        # plot_time_coverage(cutout_dates, opath)
+        # plot_possible_cutouts(pxmax, opath)
 
         # self.files_indices = files_indices
         # self.cutout_files = cutout_files
