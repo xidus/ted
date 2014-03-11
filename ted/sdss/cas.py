@@ -102,6 +102,8 @@ def create_galaxy_list():
 
     """
 
+    from .cutouts import get_covering_fields
+
     import numpy as np
     import pandas as pd
 
@@ -419,18 +421,36 @@ def create_galaxy_list():
     of getting a number of cutouts in a sequence that matches the average number of cutouts
     for the coordinates in snlist is smaller. There could be a bias here.
     """
-    MIN_NUMBER_OF_FIELDS = 50  # ?
+    # Lowest frame count 69.0
+    # Highest frame count 162.0
+    MIN_NUMBER_OF_FIELDS = 69
+    MAX_NUMBER_OF_FIELDS = 162
     # Check if enough covering fields
     # If not enough, exclude the coordinate.
+    n_fields = np.array([])
+    for i in range(ddcu_galaxies.shape[0]):
+        print '{: >5d}'.format(i),
+        Ra, Dec = ddcu_galaxies.iloc[i]
+        N = get_covering_fields(np.array([Ra, Dec])[None, :]).shape[0]
+        n_fields = np.append(n_fields, N)
+        print '- Fields: {: >3d}'.format(N)
 
-    # print 'Final size of gxlist: {:,.0f}'.format(ddcu_galaxies.shape[0])
+    fix = (
+        (n_fields >= MIN_NUMBER_OF_FIELDS)
+        &
+        (n_fields <= MAX_NUMBER_OF_FIELDS)
+    )
+
+    fddcu_galaxies = ddcu_galaxies.iloc[fix]
+
+    print 'Final size of gxlist: {:,.0f}'.format(fddcu_galaxies.shape[0])
 
     # Finalise
     # --------
 
     print 'Step finalise : save the resulting list to disk.'
 
-    ddcu_galaxies.to_csv(env.files.get('gxlist'), index=False, header=True)
+    fddcu_galaxies.to_csv(env.files.get('gxlist'), index=False, header=True)
 
 
 def plot_gxlist():
