@@ -118,6 +118,9 @@ class CutoutSequence(object):
         msg('Creating directories')
         self.create_directories()
 
+        # Create a dictionary for saved steps
+        self._file = {}
+
         # Save first entry to log files
         self.log_init()
 
@@ -201,6 +204,7 @@ class CutoutSequence(object):
         # Get covering fields
         # self.fields = get_covering_fields(self.radec)
         msg('Getting covering fields')
+        # if not self.step_finished(step='get_covering_fields'):
         self.get_covering_fields()
 
         # Selection II
@@ -364,7 +368,7 @@ class CutoutSequence(object):
         self.cpaths = cpaths
 
         """Create all paths in self.cpaths"""
-        for path in self.cpaths.itervalues():
+        for path in self.cpaths.values():
             if not os.path.exists(path):
                 os.makedirs(path)
 
@@ -373,7 +377,15 @@ class CutoutSequence(object):
         """Shortcut to retrieving a path from self.cpaths."""
         return self.cpaths.get(key)
 
-    # @logged
+    def file(self, key):
+        """Shortcut to retrieving a file path from self._file."""
+        return self._file.get(key)
+
+    def add_file(self, key=None, value=None):
+        """Shortcut to adding a file path to self._file."""
+        if key is not None:
+            self._file.update({key:value})
+
     def get_covering_fields(self):
         """
         These fields form the basis input for the cutout algorithm which will
@@ -381,13 +393,27 @@ class CutoutSequence(object):
         the surrounding area that a cutout of the required size can be made.
 
         """
-        self.fields = get_covering_fields(self.radec)
 
+        # Define filename for previously/to-be saved output
+        fname = os.path.join(self.path('coord'), 'covering_fields.csv')
+        self.add_file(key='fields', value=fname)
+
+        # Load a file or calculate again?
+        if os.path.isfile(fname):
+            self.fields = pd.read_csv(self.file('fields'))
+
+        else:
+            self.fields = get_covering_fields(self.radec)
+            self.fields.to_csv(fname, index=False, headers=True)
+
+        # Plot coverage overview for given cutout
+        plot_covering(self.radec, self.fields, self.path('coord'))
+
+        # Display output to screen
         msg('Found {:d} fields that cover coordinate {}'.format(
             self.fields.shape[0], self.crd_str)
         )
 
-    # @logged
     def get_consistent_frames(self, attempt_download=True):
         """
         Check the consistency of each file.
@@ -408,125 +434,46 @@ class CutoutSequence(object):
         self.get_covering_fields() needs to have been run.
 
         """
-        # print 'Get consistent frames ...'
 
-        nframes = self.fields.shape[0]
-        self.files = []
-        self.notfiles = []
-        self.coadded = []
+        # File name for saved output
+        fname = os.path.join(self.path('coord'), 'valid_frames.csv')
+        self.add_file(key='frames', value=fname)
 
-        for i in range(nframes):
+        # Load a file or calculate again?
+        if os.path.isfile(fname):
+            # self.frames = pd.read_csv(self.file('frames'))
+            self.frames = np.loadtxt(self.file('frames'), dtype=str).tolist()
 
-            use_file = False
+        else:
 
-            # print '{: >3d}'.format(i)
-            field = self.fields.iloc[i:i + 1]
-            filename = frame_path(field)
+            self.frames = []
+            for i in range(self.fields.shape[0]):
 
-            # 2014-02-26: from the output errors, some filenames appear to be
-            # missing the name of the file.
-            # print '  +++===>>>[[[ {} ]]]'.format(filename)
+                field = self.fields.iloc[i:i + 1]
+                filename = frame_path(field)
 
-            if field.run in (106, 206):
-                """Just adds the index"""
-                self.coadded.append(i)
-                # print 'CA', filename
+                # Skip CO-ADDED frames and non-existent files
+                if not field.run in (106, 206) and os.path.isfile(filename):
 
-            elif not os.path.isfile(filename):
-                """Just adds the index"""
-                self.notfiles.append(i)
-                # print u'!E', filename
+                    self.frames.append(filename)
 
-            else:
-                use_file = True
-                self.files.append(filename)
+                    try:
+                        # print 'Checking file integrity ...'
+                        hdus = fits.open(filename)
 
-            if use_file:
+                    except IOError:
+                        self.frames.pop()
 
-                # Some of the files that have been downloaded may be corrupted.
-                # Try to load the file and catch any *IOError*s
-
-                try:
-                    # print 'Checking file integrity ...'
-                    hdus = fits.open(filename)
-
-                except IOError:
-                    # print 'IO', filename
-
-                    if not attempt_download:
-
-                        """
-                        Try to pop from the list
-                        If list is empty, and IndexError will be thrown.
-                        Ignore this error.
-                        """
-
-                        try:
-                            self.files.pop()
-
-                        except IndexError:  # pop from empty list
-                            pass
-
-                        continue
-
-                    else:
-
-                        # Get download function
-                        from .das import download_URI
-
-                        # Close file before redownloading
+                    finally:
                         if 'hdus' in dir():
                             hdus.close()
 
-                        # print 'Trying to (re-)download ...'
-                        URI = frame_path(field, local=False)
-                        http_status, URI_, filename_ = download_URI((URI, filename))
-
-                        if http_status is 200:
-                            # print 'File was downloaded ...'
-
-                            try:
-                                # print 'Checking file integrity ...'
-                                hdus = fits.open(filename)
-
-                            except IOError:
-
-                                # print 'Oh no! Something went wrong again. \
-                                #     Skipping file for now ...'
-                                try:
-                                    self.files.pop()
-
-                                except IndexError:
-                                    pass
-
-                                continue
-
-                            finally:
-                                if 'hdus' in dir():
-                                    hdus.close()
-
-                        else:
-
-                            # print 'Response status code:', http_status
-                            # print 'Skipping file for now ...'
-
-                            try:
-                                self.files.pop()
-
-                            except IndexError:  # pop from empty list
-                                pass
-
-                            continue
-
-                finally:
-                    if 'hdus' in dir():
-                        hdus.close()
-
-        # self.fpCs = files
-        # print 'Done ...'
+            # Save it!
+            with open(fname, 'w+') as fsock:
+                fsock.write('\n'.join(self.frames))
 
         msg('Of {:d} covering fields, {:d} are valid FITS files'.format(
-                nframes, len(self.files))
+                self.fields.shape[0], len(self.frames))
         )
 
     @logged
@@ -643,7 +590,7 @@ class CutoutSequence(object):
 
         print 'Load each image and create cutout when possible (marked by \'*\' at the end)'
         # print 'In DS9 fpCs have East up, North right'
-        for i, ifname_cutout in enumerate(self.files):
+        for i, ifname_cutout in enumerate(self.frames):
 
             # Load the file
             hdulist = fits.open(ifname_cutout)
@@ -942,11 +889,31 @@ class CutoutSequence(object):
 
         msg('Succesfully created {:d} cutouts'.format(len(cutout_files)))
 
+        msg('Saving cutout data')
+
         # This is what I need for cutout_overview()
+        opath = self.path('coord')
+        ofname_cutouts = os.path.join(opath, 'cutouts.csv')
+        with open(ofname_cutouts, 'w+') as fsock:
+            fstr = '{},{}\n'
+            for (c, d) in zip(cutout_files, cutout_dates):
+                date_str = d.isoformat()
+                fsock.write(fstr.format(date_str, c))
+
+        ofname_pxmax = os.path.join(opath, 'pxmax.dat')
+        with open(ofname_pxmax, 'w+') as fsock:
+            fsock.write('\n'.join(pxmax))
+
+        msg('Creating plots for visual inspection')
+
+        # Create plots for visual inspection
+        plot_time_coverage(cutout_dates, opath)
+        plot_possible_cutouts(pxmax, opath)
+
         # self.files_indices = files_indices
         # self.cutout_files = cutout_files
-        # self.cutout_dates = cutout_dates
         # self.failed_writes = failed_writes
+        # self.cutout_dates = cutout_dates
         # self.pxmax = pxmax
         # self.row_ixes_all = row_ixes_all
         # self.row_ixes_all_r = row_ixes_all_r
@@ -1264,6 +1231,86 @@ wcsremap \
                 self.cube_residual[:, :, i], sigma=sigma
             )
 
+    def DEV_compare_neighbours(self):
+        """
+        Eight-neighbour comparison
+
+        For each residual image I_R, create four copies
+        that are shifted, respectively,
+
+            N   W
+        * [-1, -1] (NW)
+        * [-1, +1] (NE)
+        * [+1, -1] (SW)
+        * [+1, +1] (SE)
+            S   E
+
+        The local minima are the True entries in the matrix B
+
+        B = (I_R < NW) & (I_R < NE) & (I_R < SW) & (I_R < SE)
+
+        This binary field can then be overplotted on the original
+        (remapped) cutout.
+
+        Side effects
+        ------------
+        self.cube_minima_locs : float, 3D-array
+            The data cube of bit fields for each 8-neighbour comparison.
+            True : pixel location marks local minimum in LoG-filtered frames.
+                This translates to a local maximum in the remapped frames.
+            False : Not a local minimum of the LoG-filtered frames.
+
+        """
+
+        self.cube_minima_locs = np.zeros_like(self.cube_LoG)
+        for i in range(self.cube_LoG.shape[2]):
+            I_res = self.cube_LoG[:, :, i]
+
+            # Create matrix for each offset direction
+            I_cmp = []
+
+            # NW
+            I_1 = np.zeros_like(I_res)
+            I_1[0, 0] = I_res[-1, -1]
+            I_1[0, 1:] = I_res[-1, :-1]
+            I_1[1:, 0] = I_res[:-1, -1]
+            I_1[1:, 1:] = I_res[:-1, :-1]
+
+            # N
+            I_2 = np.zeros_like(I_res)
+            I_2[0, :] = I_res[-1, :]
+            I_2[1:, :] = I_res[:-1, :]
+
+            """..."""
+
+            # W
+            I_4 = np.zeros_like(I_res)
+            I_4[:, 0] = I_res[:, -1]
+            I_4[:, 1:] = I_res[:, :-1]
+
+            # E
+            I_5 = np.zeros_like(I_res)
+            I_5[:, -1] = I_res[:, 0]
+            I_5[:, :-1] = I_res[:, 1:]
+
+            """..."""
+
+            # S
+            I_7 = np.zeros_like(I_res)
+            I_7[-1, :] = I_res[0, :]
+            I_7[:-1, :] = I_res[1:, :]
+
+            """..."""
+
+            # Compare
+            I_min = np.ones_like(I_res).astype(bool)
+            for i in range(len(I_cmp)):
+                I_min &= (I_res <= I_cmp[i])
+
+            # Save into data cube of minima locations
+            self.cube_minima_locs[:, :, i] = I_min
+
+    # def DEPRECATED_compare_neighbours(self):
     def compare_neighbours(self):
         """
         Eight-neighbour comparison
@@ -1393,40 +1440,6 @@ wcsremap \
     #     I_min_thres = (cube_LoG[:, :, cut_ix] * I_min) < t_cut
 
     ## END class Cutout definition --------------------------------------------
-
-
-def DEPRECATED_get_crd(ix=None, src='snlist'):
-    """
-    Get source coordinate.
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-    radec : np.array()
-
-    """
-
-    # Available sources
-    src_lists = ('snlist', 'galaxies')
-
-    if src in src_lists:
-
-        if src == 'snlist':
-            df_list = pd.read_csv(env.files[src], sep=';')
-            radec = np.array([df_list.Ra[ix], df_list.Dec[ix]])
-
-            # peak_MJD = df_list.Peak_MJD[ix]
-            # peak_date = mjd2date(peak_MJD)
-            # print peak_date
-
-        elif src == 'galaxies':
-            print('Not implemented yet...')
-            raise SystemExit
-
-        # print '(RA, Dec) = ({}, {})'.format(*radec)
-        return radec
 
 
 def crd2str(radec):
@@ -1572,7 +1585,8 @@ def plot_possible_cutouts(pxmax, opath):
 
     Hcum = np.cumsum(h[0][::-1])[::-1]
     Hoff = h[1][:-1]
-    ax.bar(left=Hoff, height=Hcum, width=Hoff[1] - Hoff[0], alpha=.5, fc=mpl.rcParams['axes.color_cycle'][1])
+    Hkw = dict(alpha=.5, fc=mpl.rcParams['axes.color_cycle'][1])
+    ax.bar(left=Hoff, height=Hcum, width=Hoff[1] - Hoff[0], **Hkw)
 
     ax.set_ylabel(rmath('No. of frames with cutout size possible'))
     ax.set_xlabel(rmath('Cutout side length in pixels'))
@@ -1673,7 +1687,7 @@ def write_cutout_sequence_summary(cs):
     print summary
 
 
-def plot_background_models(co):
+def plot_background_models(cs):
 
     from mplconf import mplrc
     from mplconf import rmath
@@ -1682,7 +1696,7 @@ def plot_background_models(co):
 
     # Set common vmin and vmax
     vmin = 0.
-    vmax = np.max([co.template_median.max(), co.template_mean.max()])
+    vmax = np.max([cs.template_median.max(), cs.template_mean.max()])
     print vmax, np.log10(vmax)
 
     # Choose overall colour map
@@ -1691,7 +1705,7 @@ def plot_background_models(co):
     # extent : None | (left, right, bottom, top)
     # default : assigns zero-based row, column indices
     #           to the `x`, `y` centers of the pixels
-    extent = [0, co.cube_shape[0] - 1, 0, co.cube_shape[1] - 1]
+    extent = [0, cs.cube_shape[0] - 1, 0, cs.cube_shape[1] - 1]
 
     imkw = dict(cmap=cmap, interpolation='nearest')
     imkw.update(aspect='equal')  # , origin='lower')
@@ -1704,34 +1718,24 @@ def plot_background_models(co):
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15., 5.))
 
     imkw.update(vmin=vmin, vmax=np.log10(vmax))
-    ax1.imshow(np.log10(template_median), **imkw)
-    ax2.imshow(np.log10(template_mean), **imkw)
+    im1 = ax1.imshow(np.log10(cs.template_median), **imkw)
+    im2 = ax2.imshow(np.log10(cs.template_mean), **imkw)
     ax1.set_title(rmath('Log10(Median)'))
     ax2.set_title(rmath('Log10(Mean)'))
 
     imkw.update(vmin=vmin, vmax=vmax)
-    ax3.imshow(template_median, **imkw)
-    ax4.imshow(template_mean, **imkw)
+    im3 = ax3.imshow(cs.template_median, **imkw)
+    im4 = ax4.imshow(cs.template_mean, **imkw)
     ax3.set_title(rmath('Median'))
     ax4.set_title(rmath('Mean'))
 
-    for ax in (ax1, ax2, ax3, ax4):
+    for ax, im in zip((ax1, ax2, ax3, ax4), (im1, im2, im3, im4)):
         ax.set_axis_off()
-        cbar = fig.colorbar(mappable=im, ax=axes[i], **cbkw)
-
-    if 0:
-        """
-        Maybe use this for the illustration that whos the uncropped frames.
-        """
-        padx = [pad - 1, extent[1] - pad + 1, extent[1] - pad + 1, pad - 1] + [pad - 1]
-        pady = [extent[3] - pad + 1, extent[3] - pad + 1, pad - 1, pad - 1] + [extent[3] - pad + 1]
-        print padx
-        print pady
-        for ax in (ax1, ax2, ax3, ax4):
-            ax.plot(padx, pady)
+        # cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
+        fig.colorbar(mappable=im, ax=ax, **cbkw)
 
     fig.tight_layout()
-    plt.savefig(os.path.join(co.path('dim'), 'background_templates.pdf'))
+    plt.savefig(os.path.join(cs.path('coord'), 'background_templates.pdf'))
 
 
 def plot_residual_sample(cs):
@@ -1772,7 +1776,8 @@ def plot_residual_sample(cs):
         im = axes[i].imshow(cube_res[:, :, index], **imkw)
         axes[i].set_title('cube_res[:, :, {}]'.format(index))
         axes[i].set_axis_off()
-        cbar = fig.colorbar(mappable=im, ax=axes[i], **cbkw)
+        # cbar = fig.colorbar(mappable=im, ax=axes[i], **cbkw)
+        fig.colorbar(mappable=im, ax=axes[i], **cbkw)
 
     fig.tight_layout()
 
@@ -1783,7 +1788,7 @@ def plot_residual_sample(cs):
 def plot_LoG_samples(self):
 
     from mplconf import mplrc
-    from mplconf import rmath
+    # from mplconf import rmath
 
     mplrc('publish_digital')
 
@@ -1865,7 +1870,10 @@ def plot_LoG_samples(self):
     plt.savefig(ofname_check_LoG)
 
 
-def plot_detection_sample(self):
+def plot_detection_sample(cs):
+    """
+    Plot and save image of each
+    """
 
     from mplconf import mplrc
     from mplconf import rmath
@@ -2054,7 +2062,7 @@ def create_cutout_data():
     css, targets = get_cutout_sequences()
     for i, cs in enumerate(css):
         # print '{: >3d}'.format(i)
-        msg('', pad=' ')
+        msg('', char=' ')
         msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
         cs.initialise()
 
@@ -2125,8 +2133,10 @@ def do_grid_search(N_folds=5):
         cs = css_train[k]
 
         # Load registered frames and get residuals using <bg_model>
-        msg('Loading')
-        cs.load(pad=10, bg_model='median')
+        pad = 10
+        bg = 'median'
+        msg('Loading registered cutouts (pad = {:d}, bg = {})'.format(pad, bg))
+        cs.load(pad=pad, bg_model=bg)
 
         # Grid search
         # -----------
