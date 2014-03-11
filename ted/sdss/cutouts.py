@@ -407,7 +407,8 @@ class CutoutSequence(object):
             self.fields.to_csv(fname, index=False, headers=True)
 
         # Plot coverage overview for given cutout
-        plot_covering(self.radec, self.fields, self.path('coord'))
+        # Un-commenting reason: see last lines of self.create_raw_cutouts()
+        # plot_covering(self.radec, self.fields, self.path('coord'))
 
         # Display output to screen
         msg('Found {:d} fields that cover coordinate {}'.format(
@@ -913,7 +914,36 @@ class CutoutSequence(object):
 
         Error
         -----
-        <a previous error>
+        <a previous error>:
+        Traceback (most recent call last):
+          File "/home/zpq522/git/code/main.py", line 222, in <module>
+            main(*sys.argv[1:])
+          File "/home/zpq522/git/code/main.py", line 208, in main
+            ted.sdss.cutouts.create_cutout_data()
+          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 2078, in create_cutout_data
+            cs.initialise()
+          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 208, in initialise
+            self.get_covering_fields()
+          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 410, in get_covering_fields
+            plot_covering(self.radec, self.fields, self.path('coord'))
+          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 1532, in plot_covering
+            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15., 15. * 8 / w2h * 3))
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/pyplot.py", line 1046, in subplots
+            fig = figure(**fig_kw)
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/pyplot.py", line 423, in figure
+            **kwargs)
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 31, in new_figure_manager
+            return new_figure_manager_given_figure(num, thisFig)
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 38, in new_figure_manager_given_figure
+            canvas = FigureCanvasQTAgg(figure)
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 70, in __init__
+            FigureCanvasQT.__init__( self, figure )
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4.py", line 207, in __init__
+            _create_qApp()
+          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4.py", line 62, in _create_qApp
+            raise RuntimeError('Invalid DISPLAY variable')
+        RuntimeError: Invalid DISPLAY variable
+
         Tried to solve <a previous error> by writing `Display=:0.0`
         before the command that I run. This gives me the following error:
          : cannot connect to X server :0.0
