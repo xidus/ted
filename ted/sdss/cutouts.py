@@ -473,9 +473,9 @@ class CutoutSequence(object):
             with open(fname, 'w+') as fsock:
                 fsock.write('\n'.join(self.frames))
 
-        msg('Of {:d} covering fields, {:d} are valid FITS files'.format(
-                self.fields.shape[0], len(self.frames))
-        )
+        fstr = 'Of {:d} covering fields, {:d} are valid'
+        fstr += 'AND non-co-added FITS files'
+        msg(fstr.format(self.fields.shape[0], len(self.frames)))
 
     @logged
     def create_raw_cutouts(self):
@@ -903,7 +903,7 @@ class CutoutSequence(object):
 
         ofname_pxmax = os.path.join(opath, 'pxmax.dat')
         with open(ofname_pxmax, 'w+') as fsock:
-            fsock.write('\n'.join(pxmax.astype(str)))
+            fsock.write('\n'.join(np.array(pxmax).astype(str)))
 
         msg('Creating plots for visual inspection')
 
