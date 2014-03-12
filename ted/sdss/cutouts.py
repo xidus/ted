@@ -20,6 +20,17 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
+"""
+Must declare the backend beforehand, since running the program on the
+imageserver gives problems with the DISPLAY environment variable, when for some
+reason saving as .pdf invokes the qt4 backend which requires a running
+X server (which is not installed on the image(disk)servers) :/
+
+This problem only occurs, when I run the program with Office Grid, not when I
+generate the same figures using my IPython notebook server using the same code.
+
+"""
+mpl.use('pdf')
 import matplotlib.pyplot as plt
 from astropy import wcs
 from astropy.io import fits
@@ -48,7 +59,7 @@ from .stripe82 import (
 
 
 class FITSHeaderError(TEDError): pass
-
+class CutoutSequenceError(TEDError): pass
 
 class CutoutSequence(object):
     """
@@ -171,6 +182,18 @@ class CutoutSequence(object):
         """Log method to be run at the end of a method."""
         self._log.update({step: status})
         self.log_save()
+
+    # It this instance for some reason is not usable, it can be flagged.
+    @logged
+    def flag(self, reason='unspecified'):
+        """Write flag reason to file in the coordinate directory"""
+        ofname = os.path.join(self.path('coord'), 'flagged')
+        with open(ofname, 'w+') as fsock:
+            fsock.write('{}\n'.format(reason))
+
+    @property
+    def flagged(self):
+        return os.path.isfile(os.path.join(self.path('coord'), 'flagged'))
 
     # The time consumer
     # -----------------
@@ -309,7 +332,7 @@ class CutoutSequence(object):
             in the sequence, i.e. the cube of images?
 
             """
-            return np.any(self.cube_cut.ravel())
+            return np.any(self.cube_threshold.ravel())
 
             """
             Experiment: Positive only if consistens consecutive position of a signal.
@@ -425,6 +448,10 @@ class CutoutSequence(object):
 
         I did not have time for this, however.
 
+        Raises
+        ------
+        CutoutSequenceError : if no cutouts could be made at all.
+
         Side effects
         ------------
         self.files : list
@@ -436,45 +463,82 @@ class CutoutSequence(object):
 
         """
 
+        keys = [
+            'frames',
+            'frames_coadded',
+            'frames_invalid_FITS',
+            'frames_nonexistent',
+        ]
+
         # File name for saved output
-        fname = os.path.join(self.path('coord'), 'valid_frames.csv')
-        self.add_file(key='frames', value=fname)
+        for key in keys:
+            fname = os.path.join(self.path('coord'), key + '.csv')
+            self.add_file(key=key, value=fname)
 
         # Load a file or calculate again?
-        if os.path.isfile(fname):
+        if os.path.isfile(self.file('frames')):
             # self.frames = pd.read_csv(self.file('frames'))
             self.frames = np.loadtxt(self.file('frames'), dtype=str).tolist()
 
         else:
 
-            self.frames = []
+            self.frames_nonexistent = np.array([])
+            self.frames_invalid_FITS = np.array([])
+            self.frames_coadded = np.array([])
+            self.frames = np.array([])
             for i in range(self.fields.shape[0]):
+
+                coadded = False
 
                 field = self.fields.iloc[i:i + 1]
                 filename = frame_path(field)
 
                 # Skip CO-ADDED frames and non-existent files
-                if not field.run in (106, 206) and os.path.isfile(filename):
+                if field.run in (106, 206):
+                    self.frames_coadded = np.append(
+                        self.frames_coadded, filename)
+                    coadded = True
 
-                    self.frames.append(filename)
+                if not os.path.isfile(filename):
+
+                    self.frames_nonexistent = np.append(
+                        self.frames_nonexistent, filename)
+
+                else:
 
                     try:
-                        # print 'Checking file integrity ...'
+                        # Does it open?
                         hdus = fits.open(filename)
 
                     except IOError:
-                        self.frames.pop()
+                        # If not, then it is invalid FITS
+                        self.frames_invalid_FITS = np.append(
+                            self.frames_invalid_FITS, filename)
+
+                    else:
+                        if coadded:
+                            self.frames_coadded = np.append(
+                                self.frames_coadded, filename)
+                        else:
+                            # It is valid fits AND not a coadded frame.
+                            # Let's use it
+                            self.frames = np.append(self.frames, filename)
 
                     finally:
+                        # This check turned out to be necessary, when running
+                        # the program on the whole data set. Don'ø't know why.
+                        # Error is about the variable `hdus` not esxisting.
                         if 'hdus' in dir():
                             hdus.close()
 
-            # Save it!
-            with open(fname, 'w+') as fsock:
-                fsock.write('\n'.join(self.frames))
+            # Save the lists
+            for key in keys:
+                fname = self.file(key=key)
+                with open(fname, 'w+') as fsock:
+                    fsock.write('\n'.join(getattr(self, key)))
 
         fstr = 'Of {:d} covering fields, {:d} are valid'
-        fstr += 'AND non-co-added FITS files'
+        fstr += ' AND non-co-added FITS files'
         msg(fstr.format(self.fields.shape[0], len(self.frames)))
 
     @logged
@@ -515,17 +579,17 @@ class CutoutSequence(object):
         # ----------
 
         # Which files where used?
-        files_indices = []
+        self.frames_used_ix = []
 
         # Locations of output files which were written successfully to disk.
         # Also used to generate the .HTML report that will show each image.
-        cutout_files = []
+        self.cutouts = []
 
         # For the timeline
-        cutout_dates = []
+        self.cutout_dates = []
 
         # Filenames of files which the program failed to write to disk.
-        failed_writes = []
+        cutouts_failed_writes = []
 
         # Formats used to read and write formatted dates
         fmts = [
@@ -540,13 +604,15 @@ class CutoutSequence(object):
         # What is the largest possible pixel side length possible for
         # each frame?
         # = min( min(y, x), min(data.shape[0] - y, data.shape[1] - x) ) * 2 - 1
-        pxmax = []
+        self.pxmax = []
 
         # I want to map out what is going on.
         # Facts: The frames picked out above, clearly cover the candidate.
-        #        The pixel coordinates should therefore also at least be within the region covered by the image data.
+        #        The pixel coordinates should therefore also at least be within
+        #        the region covered by the image data.
 
-        # I need to find out how to get the pixels to be within the image data region.
+        # I need to find out how to get the pixels to be within the image data
+        # region.
 
         # Input:
         #   * the transformation in each frame.
@@ -560,13 +626,15 @@ class CutoutSequence(object):
         # Pixels
         # ------
 
-        # All the returned pixel coordinates when the order of the input coordinates are consistently (RA, Dec),
-        # and the returned pixel coordinates are consistently assumed to be (col_ix, row_ix)
+        # All the returned pixel coordinates when the order of the input coord-
+        # inates are consistently (RA, Dec), and the returned pixel coordinates
+        # are consistently assumed to be (col_ix, row_ix)
         row_ixes_all = []
         col_ixes_all = []
 
-        # All the returned pixel coordinates when the order of the input coordinates are consistently (RA, Dec),
-        # and the returned pixel coordinates are consistently assumed to be (col_ix, row_ix)
+        # All the returned pixel coordinates when the order of the input coord-
+        # inates are consistently (RA, Dec), and the returned pixel coordinates
+        # are consistently assumed to be (col_ix, row_ix)
         row_ixes_all_r = []
         col_ixes_all_r = []
 
@@ -579,7 +647,8 @@ class CutoutSequence(object):
 
         # astropy.io.fits will not overwrite existing files,
         # so I delete them all before creating the cutouts.
-        print 'Can not overwrite existing files, so remove old files ...'
+        print 'astropy.io.fits can not overwrite existing files,'
+        print 'so first remove any previously saved files ...'
         cmd_fits_clean = 'rm {}'.format(
             os.path.join(
                 self.path('fits'), '*.fit.gz'
@@ -589,7 +658,8 @@ class CutoutSequence(object):
         print ''
         os.system(cmd_fits_clean)
 
-        print 'Load each image and create cutout when possible (marked by \'*\' at the end)'
+        print 'Load each image and create cutout when possible'
+        print '(marked by \'*\' at the end)'
         # print 'In DS9 fpCs have East up, North right'
         for i, ifname_cutout in enumerate(self.frames):
 
@@ -610,7 +680,8 @@ class CutoutSequence(object):
             # w.printwcs()
 
             # Are the image-data axis order and the naxisi order the same?
-            # No, the image is loaded into a numpy array, and the order of the axes is row-first
+            # No, the image is loaded into a numpy array, and the order of the
+            # axes is row-first
             # whereas the order of the axes in the FITS header is column-first
 
             # i.e. print out:
@@ -625,7 +696,8 @@ class CutoutSequence(object):
             crval1, crval2 = phd.get('CRVAL1'), phd.get('CRVAL2')
             # crpix1, crpix2 = phd.get('CRPIX1'), phd.get('CRPIX2')
 
-            # Use reference world coordinates to retrieve the given reference pixel coordinates
+            # Use reference world coordinates to retrieve the given reference
+            # pixel coordinates
             reference_pixels = w.wcs_world2pix([[crval1, crval2]], 1)
 
             # What if we switch them around?
@@ -637,7 +709,8 @@ class CutoutSequence(object):
             # reference_pixels:   [[ 1024.5   744.5]]
             # reference_pixels_r: [[ 358421.2155787 -303921.6830727]]
 
-            # Then one gets values like the ones that I am more or less consistently getting.
+            # Then one gets values like the ones that I am more or less consis-
+            # tently getting.
 
             # SOLUTIONs:
             #
@@ -680,7 +753,8 @@ class CutoutSequence(object):
 
                 if 'RA' in phd.get('CTYPE1'):
 
-                    # The input order of the world coordinates has to be (RA, Dec)
+                    # The input order of the world coordinates has to be
+                    # (RA, Dec)
 
                     # Columns first
                     x, y = pixels[0, 0], pixels[0, 1]
@@ -736,7 +810,8 @@ class CutoutSequence(object):
                     row_ixes_all_r.append(pixels[0, 0])
                     col_ixes_all_r.append(pixels[0, 1])
 
-            # Now we have the x (data col) and y (data row) coordinates for the image data (in NumPy coordinates)
+            # Now we have the x (data col) and y (data row) coordinates for the
+            # image data (in NumPy coordinates)
             # Calculate the maximum-possible-square-cutout side length
             max_pixel_side_length = min(
                 min(y, x),
@@ -744,15 +819,18 @@ class CutoutSequence(object):
                     image.shape[0] - y,
                     image.shape[1] - x)
             ) * 2 - 1 # Has to be within the image data
-            pxmax.append(max_pixel_side_length)
+            self.pxmax.append(max_pixel_side_length)
 
             # Print info for all frames
-            print '{: >4d} {: >8s} (row, col) = ({: >4.0f}, {: >4.0f})'.format(i, phd.get('CTYPE1'), y, x),
+            print '{: >4d} {: >8s} (row, col) = ({: >4.0f}, {: >4.0f})'.format(
+                i, phd.get('CTYPE1'), y, x),
 
             # Recap: y is the row index
             # Recap: x is the col index
-            # print 'ROW {: >4.0f} {: >7.2f} {: >4.0f}'.format(dy, y, image.shape[0] - dy),
-            # print 'COL {: >4.0f} {: >7.2f} {: >4.0f}'.format(dx, x, image.shape[1] - dx),
+            # print 'ROW {: >4.0f} {: >7.2f} {: >4.0f}'.format(
+            #     dy, y, image.shape[0] - dy),
+            # print 'COL {: >4.0f} {: >7.2f} {: >4.0f}'.format(
+            #     dx, x, image.shape[1] - dx),
 
             is_within_ypad = (0 + self.dy <= y <= image.shape[0] - self.dy)
             is_within_xpad = (0 + self.dx <= x <= image.shape[1] - self.dx)
@@ -767,7 +845,7 @@ class CutoutSequence(object):
                 col_ixes.append(x)
 
                 # Save the index for the included input file
-                files_indices.append(i)
+                self.frames_used_ix.append(i)
 
                 # Get cutout
                 cutout_slice = image[
@@ -788,21 +866,26 @@ class CutoutSequence(object):
                     time_obs = phd.get('TAIHMS', None)
                     datetime_obs = date_obs + 'T' + time_obs
                     try:
-                        datetime_observed = dt.datetime.strptime(datetime_obs, fmts[0])
+                        datetime_observed = dt.datetime.strptime(
+                            datetime_obs, fmts[0])
 
                     except Exception:
                         try:
-                            datetime_observed = dt.datetime.strptime(date_obs, fmts[1])
+                            datetime_observed = dt.datetime.strptime(
+                                date_obs, fmts[1])
 
                         except Exception:
                             try:
-                                datetime_observed = dt.datetime.strptime(date_obs, fmts[2])
+                                datetime_observed = dt.datetime.strptime(
+                                    date_obs, fmts[2])
 
                             except Exception:
-                                raise FITSHeaderError('The header does not contain any readable observation timestamp.')
+                                err = 'The header does not contain any'
+                                err += ' readable observation timestamp.'
+                                raise FITSHeaderError(err)
 
                 # Save the cutout date for the timeline
-                cutout_dates.append(datetime_observed)
+                self.cutout_dates.append(datetime_observed)
 
                 # Format the date for the output filenames
                 date_str = dt.datetime.strftime(datetime_observed, fmts[0])
@@ -816,11 +899,14 @@ class CutoutSequence(object):
                 # Create new PrimaryHDU object
                 # Attach the changed image to it
                 # Add to the hdulist, change reference-CR+PX and so on...
-                # Ref: http://prancer.physics.louisville.edu/astrowiki/index.php/Image_processing_with_Python_and_SciPy
+                # Ref: http://prancer.physics.louisville.edu/astrowiki/index.\
+                # php/Image_processing_with_Python_and_SciPy
                 hdulist[0].data = cutout_slice
-                hdulist[0].header.set('ORIGINAL', ifname_cutout[ifname_cutout.rfind('/') + 1:])
+                hdulist[0].header.set(
+                    'ORIGINAL', ifname_cutout[ifname_cutout.rfind('/') + 1:])
 
-                # Could be nice to have the world-coordinate extent saved in the cutout, but it is not needed at the moment.
+                # Could be nice to have the world-coordinate extent saved in
+                # the cutout, but it is not needed at the moment.
                 if 0:
                     hdulist[0].header.set('RA max', )
                     hdulist[0].header.set('RA min', )
@@ -829,14 +915,21 @@ class CutoutSequence(object):
 
                 # hdulist[0].header.set('', '')
                 # Do we need all the testing above?
-                # astropy.io.fits is loading the FITS image data in a NumPy array which is indexed row-first,
-                # whereas astropy.wcs does what it does independently of how the data are being loaded by astropy.io.fits.
-                # This means that we should always expect the return order of the pixel coordinates from astropy.wcs to be
-                # (column index, row index), and that only the input order needs to be checked for.
-                # Assuming that the input order is all that one needs to know in order to correctly
+                # astropy.io.fits is loading the FITS image data in a NumPy
+                # array which is indexed row-first,
+                # whereas astropy.wcs does what it does independently of how
+                # the data are being loaded by astropy.io.fits.
+                # This means that we should always expect the return order of
+                # the pixel coordinates from astropy.wcs to be
+                # (column index, row index), and that only the input order
+                # needs to be checked for.
+                # Assuming that the input order is all that one needs to know
+                # in order to correctly
                 # set the reference coordinates below.
-                hdulist[0].header.set('CRPIX1', phd.get('CRPIX1') - (x - self.dx))
-                hdulist[0].header.set('CRPIX2', phd.get('CRPIX2') - (y - self.dy))
+                hdulist[0].header.set(
+                    'CRPIX1', phd.get('CRPIX1') - (x - self.dx))
+                hdulist[0].header.set(
+                    'CRPIX2', phd.get('CRPIX2') - (y - self.dy))
                 # hdulist[0].header.set('CRPIX1', x)
                 # hdulist[0].header.set('CRPIX2', y)
                 # if 'RA' in phd.get('CTYPE1'):
@@ -853,14 +946,15 @@ class CutoutSequence(object):
 
                 # Was the file successfully saved to disk?
                 if not os.path.isfile(ofname_fits):
-                    failed_writes.append(i)
+                    cutouts_failed_writes.append(i)
                 else:
-                    cutout_files.append(fname_fits)
+                    self.cutouts.append(fname_fits)
 
                 # As .PNG
                 # -------
 
-                # re-scale intensities (should only be done for the .png images)
+                # re-scale intensities (should only be done for the .png
+                # images)
                 cutout_slice = lingray(cutout_slice)
                 # cutout_slice = lingray(np.log10(cutout_slice))
 
@@ -872,7 +966,8 @@ class CutoutSequence(object):
                 ofname_png = os.path.join(self.path('png'), fname_png)
                 misc.imsave(ofname_png, cutout_slice)
 
-            # OK, the coordinate was not far enough from the edge of the image to make a cutout
+            # OK, the coordinate was not far enough from the edge of the image
+            # to make a cutout
             elif y < 0 or x < 0:
 
                 # Some transformations gave this, print it out
@@ -888,80 +983,44 @@ class CutoutSequence(object):
         # Summary
         # -------
 
-        msg('Succesfully created {:d} cutouts'.format(len(cutout_files)))
+        if len(self.cutouts) > 0:
+            msg('Succesfully created {:d} cutouts'.format(len(self.cutouts)))
 
-        msg('Saving cutout data')
+            msg('Saving cutout data')
 
-        # This is what I need for cutout_overview()
-        opath = self.path('coord')
-        ofname_cutouts = os.path.join(opath, 'cutouts.csv')
-        with open(ofname_cutouts, 'w+') as fsock:
-            fstr = '{},{}\n'
-            for (c, d) in zip(cutout_files, cutout_dates):
-                date_str = d.isoformat()
-                fsock.write(fstr.format(date_str, c))
+            # This is what I need for cutout_overview()
+            opath = self.path('coord')
+            ofname_cutouts = os.path.join(opath, 'cutouts.csv')
+            with open(ofname_cutouts, 'w+') as fsock:
+                fstr = '{},{}\n'
+                for (c, d) in zip(self.cutouts, self.cutout_dates):
+                    fsock.write(fstr.format(d.isoformat(), c))
 
-        ofname_pxmax = os.path.join(opath, 'pxmax.dat')
-        with open(ofname_pxmax, 'w+') as fsock:
-            fsock.write('\n'.join(np.array(pxmax).astype(str)))
+            ofname_pxmax = os.path.join(opath, 'pxmax.dat')
+            with open(ofname_pxmax, 'w+') as fsock:
+                fsock.write('\n'.join(np.array(self.pxmax).astype(str)))
 
-        msg('Creating plots for visual inspection')
+            msg('Creating plots for visual inspection')
 
-        # Create plots for visual inspection
-        """
-        This can not happen during cutout-creation time, since the job crashes
-        when it is run through Office Grid.
+            # Create plots for visual inspection
+            plot_time_coverage(self.cutout_dates, opath=self.path('coord'))
+            plot_possible_cutouts(self.pxmax, opath=self.path('coord'))
 
-        Error
-        -----
-        <a previous error>:
-        Traceback (most recent call last):
-          File "/home/zpq522/git/code/main.py", line 222, in <module>
-            main(*sys.argv[1:])
-          File "/home/zpq522/git/code/main.py", line 208, in main
-            ted.sdss.cutouts.create_cutout_data()
-          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 2078, in create_cutout_data
-            cs.initialise()
-          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 208, in initialise
-            self.get_covering_fields()
-          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 410, in get_covering_fields
-            plot_covering(self.radec, self.fields, self.path('coord'))
-          File "/home/zpq522/git/ted/ted/sdss/cutouts.py", line 1532, in plot_covering
-            fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15., 15. * 8 / w2h * 3))
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/pyplot.py", line 1046, in subplots
-            fig = figure(**fig_kw)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/pyplot.py", line 423, in figure
-            **kwargs)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 31, in new_figure_manager
-            return new_figure_manager_given_figure(num, thisFig)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 38, in new_figure_manager_given_figure
-            canvas = FigureCanvasQTAgg(figure)
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4agg.py", line 70, in __init__
-            FigureCanvasQT.__init__( self, figure )
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4.py", line 207, in __init__
-            _create_qApp()
-          File "/home/zpq522/.local/anaconda/lib/python2.7/site-packages/matplotlib/backends/backend_qt4.py", line 62, in _create_qApp
-            raise RuntimeError('Invalid DISPLAY variable')
-        RuntimeError: Invalid DISPLAY variable
+        else:
+            msg('Not enough cutouts could be made (only {:d})'.format(
+                len(self.cutouts))
+            )
 
-        Tried to solve <a previous error> by writing `Display=:0.0`
-        before the command that I run. This gives me the following error:
-         : cannot connect to X server :0.0
-        """
-        # plot_time_coverage(cutout_dates, opath)
-        # plot_possible_cutouts(pxmax, opath)
+            self.flag()
 
-        # self.files_indices = files_indices
-        # self.cutout_files = cutout_files
-        # self.failed_writes = failed_writes
-        # self.cutout_dates = cutout_dates
-        # self.pxmax = pxmax
-        # self.row_ixes_all = row_ixes_all
-        # self.row_ixes_all_r = row_ixes_all_r
-        # self.row_ixes = row_ixes
-        # self.col_ixes_all = col_ixes_all
-        # self.col_ixes_all_r = col_ixes_all_r
-        # self.col_ixes = col_ixes
+            """
+            Must stop here and return a value to the program that created this
+            instance and tell it to flag this coordinate and pick a new (non-
+            flagged) one.
+            No need to flag the ones that are inluded in tlist to begin with.
+
+            """
+            raise CutoutSequenceError('No cutouts')
 
     ### Image processing and analysis on cutouts for the given coordinate
 
@@ -1431,7 +1490,7 @@ wcsremap \
 
         Side effects
         ------------
-        self.cube_cut : float, 3D-array
+        self.cube_threshold : float, 3D-array
             Data cube containing a bit field for each frame.
             True : Intensity of the local maximum in the remapped
                 image is above threshold, i.e. the intensity is
@@ -1440,7 +1499,7 @@ wcsremap \
 
         """
 
-        self.cube_cut = np.zeros_like(self.cube_remap)
+        self.cube_threshold = np.zeros_like(self.cube_remap)
         for i in range(self.cube_remap.shape[2]):
 
             # Best way to threshold?
@@ -1468,7 +1527,7 @@ wcsremap \
             img -= imin
 
             # Save boolean matrix where True means that a signal was found.
-            self.cube_cut[:, :, i] = (img > t_cut)
+            self.cube_threshold[:, :, i] = (img > t_cut)
 
     # def threshold_LoG_values(self, t_cut=-30):
 
@@ -1595,7 +1654,7 @@ def plot_covering(radec, fields, opath):
 
     # Save it
     plt.savefig(os.path.join(opath, 'coverage.pdf'))
-    plt.savefig(os.path.join(opath, 'coverage.png'), dpi=72)
+    # plt.savefig(os.path.join(opath, 'coverage.png'), dpi=72)
 
 
 def plot_possible_cutouts(pxmax, opath):
@@ -1638,7 +1697,7 @@ def plot_possible_cutouts(pxmax, opath):
     fig.tight_layout()
 
     plt.savefig(os.path.join(opath, 'max_cutout_size.pdf'))
-    plt.savefig(os.path.join(opath, 'max_cutout_size.png'), dpi=72)
+    # plt.savefig(os.path.join(opath, 'max_cutout_size.png'), dpi=72)
 
 
 def plot_pixel_indices(co):
@@ -1666,7 +1725,7 @@ def plot_pixel_indices(co):
     fig.tight_layout()
 
     plt.savefig(os.path.join(co.path('dim'), 'pixel_indices_joint.pdf'))
-    plt.savefig(os.path.join(co.path('dim'), 'pixel_indices_joint.png'), dpi=72)
+    # plt.savefig(os.path.join(co.path('dim'), 'pixel_indices_joint.png'), dpi=72)
 
 
 def plot_time_coverage(cutout_dates, opath):
@@ -1701,7 +1760,7 @@ def plot_time_coverage(cutout_dates, opath):
     fig.tight_layout()
     # Save it in the dimension subdirectory as above.
     plt.savefig(os.path.join(opath, 'stats.pdf'))
-    plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
+    # plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
 
 
 def write_cutout_sequence_summary(cs):
@@ -2049,11 +2108,42 @@ def plot_histogram_ranked_LoG(self):
 
         # print h[0]
 
-        ofname_check_intensities = os.path.join(path_LoG, 'check_intensities_LoG.pdf')
+        ofname_check_intensities = os.path.join(opath, 'check_intensities_LoG.pdf')
         plt.savefig(ofname_check_intensities)
 
 # Control programs
 # ----------------
+
+def load_tlist():
+    return pd.read_csv(env.files.get('tlist'))
+
+
+def load_gxlist():
+    return pd.read_csv(env.files.get('gxlist'))
+
+
+def update_tlist(css, targets):
+    """Overwrite the existing tlist (having made the backup)"""
+
+    import shutil
+
+    # First save a copy of the original tlist, if not done already
+    fname_tlist_backup = env.files.get('tlist') \
+                            + '.backup' + dt.datetime.isoformat()
+    shutil.copyfile(env.files.get('tlist'), fname_tlist_backup)
+
+    # Now that it is saved, the possibly changed list can be saved as tlist.
+    # For now it seems easier to just change the original dataframe and save.
+    tlist = load_tlist()
+    for i, (cs, target) in enumerate(zip(css, targets)):
+        Ra, Dec = cs.radec.flatten()
+        tlist.iloc[i]['Ra'] = Ra
+        tlist.iloc[i]['Dec'] = Dec
+        tlist.iloc[i]['is_sn'] = int(target)
+
+    # Write to disk
+    tlist.to_csv(env.files.get('tlist'), index=False, headers=True)
+
 
 def get_cutout_sequences():
     """
@@ -2067,7 +2157,7 @@ def get_cutout_sequences():
 
     """
 
-    tlist = pd.read_csv(env.files.get('tlist'))
+    tlist = load_tlist()
 
     # print tlist.info()
     # print tlist.head()
@@ -2095,6 +2185,34 @@ def get_cutout_sequences():
     return np.array(cutout_sequences), np.array(targets)
 
 
+def log_tlist_stats(cs=None):
+    if cs is not None:
+
+        if not os.path.isfile(env.files.get('log_tlist')):
+
+            columns = [
+                'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
+            ]
+
+            # Save the column names
+            with open(env.files.get('log_tlist'), 'w+') as fsock:
+                fsock.write('{}\n'.format(','.join(columns)))
+
+        # Get the information
+        Ra, Dec = cs.radec.flatten()
+        is_sn = int(cs.is_sn)
+        N_fields = cs.fields.shape[0]
+        N_frames = cs.frames.shape[0]
+        N_cutouts = len(cs.cutouts)
+        line = [
+            str(d)
+            for d in (Ra, Dec, is_sn, N_fields, N_frames, N_cutouts)
+        ]
+
+        with open(env.files.get('log_tlist'), 'a') as fsock:
+            fsock.write('{}\n'.format(','.join(line)))
+
+
 def create_cutout_data():
     """
     Initialise directories and create data for analysis.
@@ -2105,7 +2223,68 @@ def create_cutout_data():
         # print '{: >3d}'.format(i)
         msg('', char=' ')
         msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
-        cs.initialise()
+        no_cutouts_made = True
+        while no_cutouts_made:
+
+            try:
+                cs.initialise()
+
+            except CutoutSequenceError as err:
+                msg('CutoutSequenceError: ' + err.upper())
+
+                """
+                cs is now flagged, and the flagging has been saved to the
+                logfile for that coordinate.
+                """
+
+                # Begin log entry
+                # Entry index of tlist.csv.backup
+                line = ['{:d}'.format(i)]
+                line += cs.radec.flatten().astype(str).tolist()
+                line += [str(int(cs.is_sn))]
+                with open(env.files.get('log_cutouts'), 'a') as fsock:
+                    fsock.write('{}\n'.format(','.join(line)))
+
+                # Now keep looking for a replacement for this entry
+                # until a sequence can be made with the given coordinate.
+
+                # Load both datasets so can check coordinate usage.
+                tlist = load_tlist()
+                gxlist = load_gxlist()
+                N_gx = gxlist.shape[0]
+                params = dict(size=(101, 101))
+                either_flagged_or_in_use = True
+                while either_flagged_or_in_use:
+                    RA, Dec = gxlist.iloc[np.random.randint(0, N_gx)]
+
+                    # Check that NOT in tlist
+                    tix = (tlist.Ra.values == RA) & (tlist.Dec.values == Dec)
+                    if tix.sum() > 1:
+                        continue
+
+                    # Otherwise create instance
+                    params.update(radec=np.array([RA, Dec]), is_sn=False)
+                    cs = CutoutSequence(**params)
+
+                    # Was the instance previously flagged?
+                    # If not, use it
+                    if cs.flagged:
+                        either_flagged_or_in_use = False
+
+            else:
+                no_cutouts_made = False
+
+        # Outside of outer while loop, but inside for loop.
+        # change the entry css
+        css[i] = cs
+        targets[i] = int(cs.is_cn)
+
+        # Save the stats for this instance
+        log_tlist_stats(cs)
+
+    # Outside the outer loop
+    # Save the possibly updated tlist to disk
+    update_tlist(css, targets)
 
 
 def do_grid_search(N_folds=5):
@@ -2303,5 +2482,4 @@ def main():
     # plot_time_coverage(cutout_dates=co.cutout_dates, opath=co.path('dim'))
     # write_cutout_summary(co=co)
     # HTML_create_cutout_display(co.cutout_files, co.path('dim'))
-
 
