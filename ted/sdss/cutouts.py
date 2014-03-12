@@ -141,7 +141,7 @@ class CutoutSequence(object):
     def logged(fun):
         """A decorator for logging"""
         def wrapped(self, *args, **kwargs):
-            if not self.step_finished(fun.func_name) == 'finished':
+            if not self.step_finished(fun.func_name):
                 fun(self, *args, **kwargs)
                 self.log(step=fun.func_name, status='finished')
         return wrapped
@@ -431,7 +431,7 @@ class CutoutSequence(object):
 
         # Plot coverage overview for given cutout
         # Un-commenting reason: see last lines of self.create_raw_cutouts()
-        # plot_covering(self.radec, self.fields, self.path('coord'))
+        plot_covering(self.radec, self.fields, self.path('coord'))
 
         # Display output to screen
         msg('Found {:d} fields that cover coordinate {}'.format(
@@ -472,7 +472,7 @@ class CutoutSequence(object):
 
         # File name for saved output
         for key in keys:
-            fname = os.path.join(self.path('coord'), key + '.csv')
+            fname = os.path.join(self.path('coord'), key + '.dat')
             self.add_file(key=key, value=fname)
 
         # Load a file or calculate again?
@@ -541,7 +541,7 @@ class CutoutSequence(object):
         fstr += ' AND non-co-added FITS files'
         msg(fstr.format(self.fields.shape[0], len(self.frames)))
 
-    @logged
+    # @logged
     def create_raw_cutouts(self):
         """
         Cutout algorithm
@@ -568,417 +568,437 @@ class CutoutSequence(object):
         created in the png directory, so that all the output cutouts
         and the stats can be viewd in one single document.
 
-
         Dependencies
         ------------
         self.get_consistent_frames() needs to have been run before this step.
 
         """
 
-        # Accounting
-        # ----------
+        ofname_cutouts = os.path.join(self.path('coord'), 'cutouts.csv')
+        ofname_pxmax = os.path.join(self.path('coord'), 'pxmax.dat')
 
-        # Which files where used?
-        self.frames_used_ix = []
+        if os.path.isfile(ofname_cutouts) and os.path.isfile(ofname_pxmax):
 
-        # Locations of output files which were written successfully to disk.
-        # Also used to generate the .HTML report that will show each image.
-        self.cutouts = []
+            def s2d(s):
+                for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
+                    try: return dt.datetime.strptime(s, fmt)
+                    except: continue
 
-        # For the timeline
-        self.cutout_dates = []
+            self.pxmax = list(np.loadtxt(ofname_pxmax))
+            dtype = [('datetime', dt.datetime), ('cutouts', str)]
+            lkw = dict(converters={0:s2d}, delimiter=',', dtype=dtype)
+            data = np.loadtxt(ofname_cutouts, **lkw)
+            self.cutout_dates, self.cutouts = [data[name]
+                                                for name in data.dtype.names]
 
-        # Filenames of files which the program failed to write to disk.
-        cutouts_failed_writes = []
+        else:
 
-        # Formats used to read and write formatted dates
-        fmts = [
-            '%Y-%m-%dT%H:%M:%S',
-            '%Y-%m-%d',
-            '%y/%m/%d',
-        #     '%H:%M:%S',
-        ]
+            """Create the cutouts"""
 
-        # For finding out what the largest possible cutout size is which
-        # allows for a descent number of cutouts.
-        # What is the largest possible pixel side length possible for
-        # each frame?
-        # = min( min(y, x), min(data.shape[0] - y, data.shape[1] - x) ) * 2 - 1
-        self.pxmax = []
+            # Accounting
+            # ----------
 
-        # I want to map out what is going on.
-        # Facts: The frames picked out above, clearly cover the candidate.
-        #        The pixel coordinates should therefore also at least be within
-        #        the region covered by the image data.
+            # Which files where used?
+            frames_used_ix = []
 
-        # I need to find out how to get the pixels to be within the image data
-        # region.
+            # Locations of output files which were written successfully to disk.
+            # Also used to generate the .HTML report that will show each image.
+            self.cutouts = []
 
-        # Input:
-        #   * the transformation in each frame.
-        #   * the coordinate that the cutout has to be made around
+            # For the timeline
+            self.cutout_dates = []
 
-        # Given the transformation,
-        #   * what is the order of the returned pixel coordinates?
-        #   * what is the expected order of the world coordinates
-        #     that are fed into the conversion function?
+            # Filenames of files which the program failed to write to disk.
+            cutouts_failed_writes = []
 
-        # Pixels
-        # ------
+            # Formats used to read and write formatted dates
+            fmts = [
+                '%Y-%m-%dT%H:%M:%S',
+                '%Y-%m-%d',
+                '%y/%m/%d',
+            #     '%H:%M:%S',
+            ]
 
-        # All the returned pixel coordinates when the order of the input coord-
-        # inates are consistently (RA, Dec), and the returned pixel coordinates
-        # are consistently assumed to be (col_ix, row_ix)
-        row_ixes_all = []
-        col_ixes_all = []
+            # For finding out what the largest possible cutout size is which
+            # allows for a descent number of cutouts.
+            # What is the largest possible pixel side length possible for
+            # each frame?
+            # = min( min(y, x), min(data.shape[0] - y, data.shape[1] - x) ) * 2 - 1
+            self.pxmax = []
 
-        # All the returned pixel coordinates when the order of the input coord-
-        # inates are consistently (RA, Dec), and the returned pixel coordinates
-        # are consistently assumed to be (col_ix, row_ix)
-        row_ixes_all_r = []
-        col_ixes_all_r = []
+            # I want to map out what is going on.
+            # Facts: The frames picked out above, clearly cover the candidate.
+            #        The pixel coordinates should therefore also at least be within
+            #        the region covered by the image data.
 
-        # Actual, used row and col indices of the cutouts that can be made
-        row_ixes = []
-        col_ixes = []
+            # I need to find out how to get the pixels to be within the image data
+            # region.
 
-        # Clean up
-        # --------
+            # Input:
+            #   * the transformation in each frame.
+            #   * the coordinate that the cutout has to be made around
 
-        # astropy.io.fits will not overwrite existing files,
-        # so I delete them all before creating the cutouts.
-        print 'astropy.io.fits can not overwrite existing files,'
-        print 'so first remove any previously saved files ...'
-        cmd_fits_clean = 'rm {}'.format(
-            os.path.join(
-                self.path('fits'), '*.fit.gz'
+            # Given the transformation,
+            #   * what is the order of the returned pixel coordinates?
+            #   * what is the expected order of the world coordinates
+            #     that are fed into the conversion function?
+
+            # Pixels
+            # ------
+
+            # All the returned pixel coordinates when the order of the input coord-
+            # inates are consistently (RA, Dec), and the returned pixel coordinates
+            # are consistently assumed to be (col_ix, row_ix)
+            row_ixes_all = []
+            col_ixes_all = []
+
+            # All the returned pixel coordinates when the order of the input coord-
+            # inates are consistently (RA, Dec), and the returned pixel coordinates
+            # are consistently assumed to be (col_ix, row_ix)
+            row_ixes_all_r = []
+            col_ixes_all_r = []
+
+            # Actual, used row and col indices of the cutouts that can be made
+            row_ixes = []
+            col_ixes = []
+
+            # Clean up
+            # --------
+
+            # astropy.io.fits will not overwrite existing files,
+            # so I delete them all before creating the cutouts.
+            print 'astropy.io.fits can not overwrite existing files,'
+            print 'so first remove any previously saved files ...'
+            cmd_fits_clean = 'rm {}'.format(
+                os.path.join(
+                    self.path('fits'), '*.fit.gz'
+                )
             )
-        )
-        print cmd_fits_clean
-        print ''
-        os.system(cmd_fits_clean)
+            print cmd_fits_clean
+            print ''
+            os.system(cmd_fits_clean)
 
-        print 'Load each image and create cutout when possible'
-        print '(marked by \'*\' at the end)'
-        # print 'In DS9 fpCs have East up, North right'
-        for i, ifname_cutout in enumerate(self.frames):
+            print 'Load each image and create cutout when possible'
+            print '(marked by \'*\' at the end)'
+            # print 'In DS9 fpCs have East up, North right'
+            for i, ifname_cutout in enumerate(self.frames):
 
-            # Load the file
-            hdulist = fits.open(ifname_cutout)
+                # Load the file
+                hdulist = fits.open(ifname_cutout)
 
-            # Get the primary HDU
-            primary = hdulist[0]
+                # Get the primary HDU
+                primary = hdulist[0]
 
-            # Get the header of the primary HDU
-            phd = primary.header
+                # Get the header of the primary HDU
+                phd = primary.header
 
-            # Get the image data
-            image = primary.data
+                # Get the image data
+                image = primary.data
 
-            # Load the coordinate transformation
-            w = wcs.WCS(phd)
-            # w.printwcs()
+                # Load the coordinate transformation
+                w = wcs.WCS(phd)
+                # w.printwcs()
 
-            # Are the image-data axis order and the naxisi order the same?
-            # No, the image is loaded into a numpy array, and the order of the
-            # axes is row-first
-            # whereas the order of the axes in the FITS header is column-first
+                # Are the image-data axis order and the naxisi order the same?
+                # No, the image is loaded into a numpy array, and the order of the
+                # axes is row-first
+                # whereas the order of the axes in the FITS header is column-first
 
-            # i.e. print out:
-            # print 'image.shape:      ({}, {})'.format(*image.shape)
-            # print '(naxis1, naxis2): ({}, {})'.format(w.naxis1, w.naxis2)
+                # i.e. print out:
+                # print 'image.shape:      ({}, {})'.format(*image.shape)
+                # print '(naxis1, naxis2): ({}, {})'.format(w.naxis1, w.naxis2)
 
-            # Gives:
-            # image.shape:      (1489, 2048)
-            # (naxis1, naxis2): (2048, 1489)
+                # Gives:
+                # image.shape:      (1489, 2048)
+                # (naxis1, naxis2): (2048, 1489)
 
-            # Get the reference world coordinates
-            crval1, crval2 = phd.get('CRVAL1'), phd.get('CRVAL2')
-            # crpix1, crpix2 = phd.get('CRPIX1'), phd.get('CRPIX2')
+                # Get the reference world coordinates
+                crval1, crval2 = phd.get('CRVAL1'), phd.get('CRVAL2')
+                # crpix1, crpix2 = phd.get('CRPIX1'), phd.get('CRPIX2')
 
-            # Use reference world coordinates to retrieve the given reference
-            # pixel coordinates
-            reference_pixels = w.wcs_world2pix([[crval1, crval2]], 1)
+                # Use reference world coordinates to retrieve the given reference
+                # pixel coordinates
+                reference_pixels = w.wcs_world2pix([[crval1, crval2]], 1)
 
-            # What if we switch them around?
-            # reference_pixels_r = w.wcs_world2pix([[crval2, crval1]], 1)
+                # What if we switch them around?
+                # reference_pixels_r = w.wcs_world2pix([[crval2, crval1]], 1)
 
-            # print 'reference_pixels:  ', reference_pixels
-            # print 'reference_pixels_r:', reference_pixels_r
+                # print 'reference_pixels:  ', reference_pixels
+                # print 'reference_pixels_r:', reference_pixels_r
 
-            # reference_pixels:   [[ 1024.5   744.5]]
-            # reference_pixels_r: [[ 358421.2155787 -303921.6830727]]
+                # reference_pixels:   [[ 1024.5   744.5]]
+                # reference_pixels_r: [[ 358421.2155787 -303921.6830727]]
 
-            # Then one gets values like the ones that I am more or less consis-
-            # tently getting.
+                # Then one gets values like the ones that I am more or less consis-
+                # tently getting.
 
-            # SOLUTIONs:
-            #
-            # One way of getting the correct pixel coordinates could then be
-            #  to just check for outragous pixel-coordinate values, and
-            #  switch the world coordinate input order if necessary.
-
-            # First sanity check: compare given and retrieved reference pixels.
-            pix1, pix2 = reference_pixels[0, 0], reference_pixels[0, 1]
-
-            # Second sanity check: Transform using both input orderings
-            pixels = w.wcs_world2pix(self.world, 1)
-            pixels_r = w.wcs_world2pix(self.world_r, 1)
-
-            # print pixels
-            # print pixels2
-            # print phd.get('CTYPE1')
-
-            # [[ 357706.51209122 -302862.75875357]]
-            # [[ 1821.48191956   494.61177651]]
-            # DEC--TAN
-
-            # [[ 1947.93272917  1482.63382086]]
-            # [[ 357461.49779276 -301603.01175018]]
-            # RA---TAN
-
-            # Are naxis1 and naxis2 as we would expect? (col_ix, row_ix)
-            if pix1 > pix2:
-                # i.e. we compare sth like (1024.5 > 744.5)
-
-                # Compared to the image data array,
-                # the returned pixel indices are
-                # returned in the order
+                # SOLUTIONs:
                 #
-                #   (column index, row index)
-                #
-                # I switch the assignment order, so that
-                #     * y is the row index, and
-                #     * x is the column index.
+                # One way of getting the correct pixel coordinates could then be
+                #  to just check for outragous pixel-coordinate values, and
+                #  switch the world coordinate input order if necessary.
 
-                if 'RA' in phd.get('CTYPE1'):
+                # First sanity check: compare given and retrieved reference pixels.
+                pix1, pix2 = reference_pixels[0, 0], reference_pixels[0, 1]
 
-                    # The input order of the world coordinates has to be
-                    # (RA, Dec)
+                # Second sanity check: Transform using both input orderings
+                pixels = w.wcs_world2pix(self.world, 1)
+                pixels_r = w.wcs_world2pix(self.world_r, 1)
 
-                    # Columns first
-                    x, y = pixels[0, 0], pixels[0, 1]
+                # print pixels
+                # print pixels2
+                # print phd.get('CTYPE1')
 
-                    # Save all indices for debugging
-                    col_ixes_all.append(x)
-                    row_ixes_all.append(y)
+                # [[ 357706.51209122 -302862.75875357]]
+                # [[ 1821.48191956   494.61177651]]
+                # DEC--TAN
 
-                    col_ixes_all_r.append(pixels_r[0, 0])
-                    row_ixes_all_r.append(pixels_r[0, 1])
+                # [[ 1947.93272917  1482.63382086]]
+                # [[ 357461.49779276 -301603.01175018]]
+                # RA---TAN
+
+                # Are naxis1 and naxis2 as we would expect? (col_ix, row_ix)
+                if pix1 > pix2:
+                    # i.e. we compare sth like (1024.5 > 744.5)
+
+                    # Compared to the image data array,
+                    # the returned pixel indices are
+                    # returned in the order
+                    #
+                    #   (column index, row index)
+                    #
+                    # I switch the assignment order, so that
+                    #     * y is the row index, and
+                    #     * x is the column index.
+
+                    if 'RA' in phd.get('CTYPE1'):
+
+                        # The input order of the world coordinates has to be
+                        # (RA, Dec)
+
+                        # Columns first
+                        x, y = pixels[0, 0], pixels[0, 1]
+
+                        # Save all indices for debugging
+                        col_ixes_all.append(x)
+                        row_ixes_all.append(y)
+
+                        col_ixes_all_r.append(pixels_r[0, 0])
+                        row_ixes_all_r.append(pixels_r[0, 1])
+
+                    else:
+                        # Still columns first
+                        x, y = pixels_r[0, 0], pixels_r[0, 1]
+
+                        # Save all indices for debugging
+                        # Notice that the post fixes ('', '_r') are switched
+                        col_ixes_all.append(x)
+                        row_ixes_all.append(y)
+
+                        row_ixes_all_r.append(pixels[0, 0])
+                        col_ixes_all_r.append(pixels[0, 1])
 
                 else:
-                    # Still columns first
-                    x, y = pixels_r[0, 0], pixels_r[0, 1]
 
-                    # Save all indices for debugging
-                    # Notice that the post fixes ('', '_r') are switched
-                    col_ixes_all.append(x)
-                    row_ixes_all.append(y)
+                     # (Assuming that pix1 != pix2)
 
-                    row_ixes_all_r.append(pixels[0, 0])
-                    col_ixes_all_r.append(pixels[0, 1])
+                    # Compared to the image data array,
+                    # the returned pixel indices are
+                    # returned in the order
+                    #
+                    #   (row index, column index)
+                    #
 
-            else:
+                    if 'RA' in phd.get('CTYPE1'):
+                        y, x = pixels[0, 0], pixels[0, 1]
 
-                 # (Assuming that pix1 != pix2)
+                        # Save all indices for debugging
+                        col_ixes_all.append(x)
+                        row_ixes_all.append(y)
 
-                # Compared to the image data array,
-                # the returned pixel indices are
-                # returned in the order
-                #
-                #   (row index, column index)
-                #
+                        col_ixes_all_r.append(pixels_r[0, 0])
+                        row_ixes_all_r.append(pixels_r[0, 1])
 
-                if 'RA' in phd.get('CTYPE1'):
-                    y, x = pixels[0, 0], pixels[0, 1]
+                    else:
+                        x, y = pixels_r[0, 0], pixels_r[0, 1]
 
-                    # Save all indices for debugging
-                    col_ixes_all.append(x)
-                    row_ixes_all.append(y)
+                        # Save all indices for debugging
+                        # Notice that the post fixes ('', '_r') are switched
+                        col_ixes_all.append(x)
+                        row_ixes_all.append(y)
 
-                    col_ixes_all_r.append(pixels_r[0, 0])
-                    row_ixes_all_r.append(pixels_r[0, 1])
+                        row_ixes_all_r.append(pixels[0, 0])
+                        col_ixes_all_r.append(pixels[0, 1])
 
-                else:
-                    x, y = pixels_r[0, 0], pixels_r[0, 1]
+                # Now we have the x (data col) and y (data row) coordinates for the
+                # image data (in NumPy coordinates)
+                # Calculate the maximum-possible-square-cutout side length
+                max_pixel_side_length = min(
+                    min(y, x),
+                    min(
+                        image.shape[0] - y,
+                        image.shape[1] - x)
+                ) * 2 - 1 # Has to be within the image data
+                self.pxmax.append(max_pixel_side_length)
 
-                    # Save all indices for debugging
-                    # Notice that the post fixes ('', '_r') are switched
-                    col_ixes_all.append(x)
-                    row_ixes_all.append(y)
+                # Print info for all frames
+                print '{: >4d} {: >8s} (row, col) = ({: >4.0f}, {: >4.0f})'.format(
+                    i, phd.get('CTYPE1'), y, x),
 
-                    row_ixes_all_r.append(pixels[0, 0])
-                    col_ixes_all_r.append(pixels[0, 1])
+                # Recap: y is the row index
+                # Recap: x is the col index
+                # print 'ROW {: >4.0f} {: >7.2f} {: >4.0f}'.format(
+                #     dy, y, image.shape[0] - dy),
+                # print 'COL {: >4.0f} {: >7.2f} {: >4.0f}'.format(
+                #     dx, x, image.shape[1] - dx),
 
-            # Now we have the x (data col) and y (data row) coordinates for the
-            # image data (in NumPy coordinates)
-            # Calculate the maximum-possible-square-cutout side length
-            max_pixel_side_length = min(
-                min(y, x),
-                min(
-                    image.shape[0] - y,
-                    image.shape[1] - x)
-            ) * 2 - 1 # Has to be within the image data
-            self.pxmax.append(max_pixel_side_length)
+                is_within_ypad = (0 + self.dy <= y <= image.shape[0] - self.dy)
+                is_within_xpad = (0 + self.dx <= x <= image.shape[1] - self.dx)
 
-            # Print info for all frames
-            print '{: >4d} {: >8s} (row, col) = ({: >4.0f}, {: >4.0f})'.format(
-                i, phd.get('CTYPE1'), y, x),
+                if is_within_ypad and is_within_xpad:
 
-            # Recap: y is the row index
-            # Recap: x is the col index
-            # print 'ROW {: >4.0f} {: >7.2f} {: >4.0f}'.format(
-            #     dy, y, image.shape[0] - dy),
-            # print 'COL {: >4.0f} {: >7.2f} {: >4.0f}'.format(
-            #     dx, x, image.shape[1] - dx),
+                    # Mark this to the screen
+                    print '*'
 
-            is_within_ypad = (0 + self.dy <= y <= image.shape[0] - self.dy)
-            is_within_xpad = (0 + self.dx <= x <= image.shape[1] - self.dx)
+                    # Append the pixel coordinates for plotting below
+                    row_ixes.append(y)
+                    col_ixes.append(x)
 
-            if is_within_ypad and is_within_xpad:
+                    # Save the index for the included input file
+                    frames_used_ix.append(i)
 
-                # Mark this to the screen
-                print '*'
+                    # Get cutout
+                    cutout_slice = image[
+                        y - self.dy:y + self.dy + 1,
+                        x - self.dx:x + self.dx + 1
+                    ]
+                    # cutout_slice = image
 
-                # Append the pixel coordinates for plotting below
-                row_ixes.append(y)
-                col_ixes.append(x)
+                    # Get observation time
+                    tai = phd.get('TAI', None)
 
-                # Save the index for the included input file
-                self.frames_used_ix.append(i)
-
-                # Get cutout
-                cutout_slice = image[
-                    y - self.dy:y + self.dy + 1,
-                    x - self.dx:x + self.dx + 1
-                ]
-                # cutout_slice = image
-
-                # Get observation time
-                tai = phd.get('TAI', None)
-
-                try:
-                    datetime_observed = tai2date(tai)
-
-                except Exception:
-                    # Use DATE-OBS instead
-                    date_obs = phd.get('DATE-OBS', None)
-                    time_obs = phd.get('TAIHMS', None)
-                    datetime_obs = date_obs + 'T' + time_obs
                     try:
-                        datetime_observed = dt.datetime.strptime(
-                            datetime_obs, fmts[0])
+                        datetime_observed = tai2date(tai)
 
                     except Exception:
+                        # Use DATE-OBS instead
+                        date_obs = phd.get('DATE-OBS', None)
+                        time_obs = phd.get('TAIHMS', None)
+                        datetime_obs = date_obs + 'T' + time_obs
                         try:
                             datetime_observed = dt.datetime.strptime(
-                                date_obs, fmts[1])
+                                datetime_obs, fmts[0])
 
                         except Exception:
                             try:
                                 datetime_observed = dt.datetime.strptime(
-                                    date_obs, fmts[2])
+                                    date_obs, fmts[1])
 
                             except Exception:
-                                err = 'The header does not contain any'
-                                err += ' readable observation timestamp.'
-                                raise FITSHeaderError(err)
+                                try:
+                                    datetime_observed = dt.datetime.strptime(
+                                        date_obs, fmts[2])
 
-                # Save the cutout date for the timeline
-                self.cutout_dates.append(datetime_observed)
+                                except Exception:
+                                    err = 'The header does not contain any'
+                                    err += ' readable observation timestamp.'
+                                    raise FITSHeaderError(err)
 
-                # Format the date for the output filenames
-                date_str = dt.datetime.strftime(datetime_observed, fmts[0])
-                # date_str = dt.datetime.strftime(datetime_observed, '%s')
+                    # Save the cutout date for the timeline
+                    self.cutout_dates.append(datetime_observed)
 
-                # Save the cutout
+                    # Format the date for the output filenames
+                    date_str = dt.datetime.strftime(datetime_observed, fmts[0])
+                    # date_str = dt.datetime.strftime(datetime_observed, '%s')
 
-                # As .FITS
-                # --------
-                # ...
-                # Create new PrimaryHDU object
-                # Attach the changed image to it
-                # Add to the hdulist, change reference-CR+PX and so on...
-                # Ref: http://prancer.physics.louisville.edu/astrowiki/index.\
-                # php/Image_processing_with_Python_and_SciPy
-                hdulist[0].data = cutout_slice
-                hdulist[0].header.set(
-                    'ORIGINAL', ifname_cutout[ifname_cutout.rfind('/') + 1:])
+                    # Save the cutout
 
-                # Could be nice to have the world-coordinate extent saved in
-                # the cutout, but it is not needed at the moment.
-                if 0:
-                    hdulist[0].header.set('RA max', )
-                    hdulist[0].header.set('RA min', )
-                    hdulist[0].header.set('Dec max', )
-                    hdulist[0].header.set('Dec min', )
+                    # As .FITS
+                    # --------
+                    # ...
+                    # Create new PrimaryHDU object
+                    # Attach the changed image to it
+                    # Add to the hdulist, change reference-CR+PX and so on...
+                    # Ref: http://prancer.physics.louisville.edu/astrowiki/index.\
+                    # php/Image_processing_with_Python_and_SciPy
+                    hdulist[0].data = cutout_slice
+                    hdulist[0].header.set(
+                        'ORIGINAL', ifname_cutout[ifname_cutout.rfind('/') + 1:])
 
-                # hdulist[0].header.set('', '')
-                # Do we need all the testing above?
-                # astropy.io.fits is loading the FITS image data in a NumPy
-                # array which is indexed row-first,
-                # whereas astropy.wcs does what it does independently of how
-                # the data are being loaded by astropy.io.fits.
-                # This means that we should always expect the return order of
-                # the pixel coordinates from astropy.wcs to be
-                # (column index, row index), and that only the input order
-                # needs to be checked for.
-                # Assuming that the input order is all that one needs to know
-                # in order to correctly
-                # set the reference coordinates below.
-                hdulist[0].header.set(
-                    'CRPIX1', phd.get('CRPIX1') - (x - self.dx))
-                hdulist[0].header.set(
-                    'CRPIX2', phd.get('CRPIX2') - (y - self.dy))
-                # hdulist[0].header.set('CRPIX1', x)
-                # hdulist[0].header.set('CRPIX2', y)
-                # if 'RA' in phd.get('CTYPE1'):
-                #     # The order is (RA, Dec)
-                #     hdulist[0].header.set('CRVAL1', world[0, 0])
-                #     hdulist[0].header.set('CRVAL2', world[0, 1])
-                # else:
-                #     # The order is (Dec, RA)
-                #     hdulist[0].header.set('CRVAL1', world_r[0, 0])
-                #     hdulist[0].header.set('CRVAL2', world_r[0, 1])
-                fname_fits = date_str + '.fit.gz'
-                ofname_fits = os.path.join(self.path('fits'), fname_fits)
-                hdulist.writeto(ofname_fits)
+                    # Could be nice to have the world-coordinate extent saved in
+                    # the cutout, but it is not needed at the moment.
+                    if 0:
+                        hdulist[0].header.set('RA max', )
+                        hdulist[0].header.set('RA min', )
+                        hdulist[0].header.set('Dec max', )
+                        hdulist[0].header.set('Dec min', )
 
-                # Was the file successfully saved to disk?
-                if not os.path.isfile(ofname_fits):
-                    cutouts_failed_writes.append(i)
+                    # hdulist[0].header.set('', '')
+                    # Do we need all the testing above?
+                    # astropy.io.fits is loading the FITS image data in a NumPy
+                    # array which is indexed row-first,
+                    # whereas astropy.wcs does what it does independently of how
+                    # the data are being loaded by astropy.io.fits.
+                    # This means that we should always expect the return order of
+                    # the pixel coordinates from astropy.wcs to be
+                    # (column index, row index), and that only the input order
+                    # needs to be checked for.
+                    # Assuming that the input order is all that one needs to know
+                    # in order to correctly
+                    # set the reference coordinates below.
+                    hdulist[0].header.set(
+                        'CRPIX1', phd.get('CRPIX1') - (x - self.dx))
+                    hdulist[0].header.set(
+                        'CRPIX2', phd.get('CRPIX2') - (y - self.dy))
+                    # hdulist[0].header.set('CRPIX1', x)
+                    # hdulist[0].header.set('CRPIX2', y)
+                    # if 'RA' in phd.get('CTYPE1'):
+                    #     # The order is (RA, Dec)
+                    #     hdulist[0].header.set('CRVAL1', world[0, 0])
+                    #     hdulist[0].header.set('CRVAL2', world[0, 1])
+                    # else:
+                    #     # The order is (Dec, RA)
+                    #     hdulist[0].header.set('CRVAL1', world_r[0, 0])
+                    #     hdulist[0].header.set('CRVAL2', world_r[0, 1])
+                    fname_fits = date_str + '.fit.gz'
+                    ofname_fits = os.path.join(self.path('fits'), fname_fits)
+                    hdulist.writeto(ofname_fits)
+
+                    # Was the file successfully saved to disk?
+                    if not os.path.isfile(ofname_fits):
+                        cutouts_failed_writes.append(i)
+                    else:
+                        self.cutouts.append(fname_fits)
+
+                    # As .PNG
+                    # -------
+
+                    # re-scale intensities (should only be done for the .png
+                    # images)
+                    cutout_slice = lingray(cutout_slice)
+                    # cutout_slice = lingray(np.log10(cutout_slice))
+
+                    # Normalise
+                    cutout_slice = cutout_slice / cutout_slice.sum()
+
+                    # Save the image
+                    fname_png = date_str + '.png'
+                    ofname_png = os.path.join(self.path('png'), fname_png)
+                    misc.imsave(ofname_png, cutout_slice)
+
+                # OK, the coordinate was not far enough from the edge of the image
+                # to make a cutout
+                elif y < 0 or x < 0:
+
+                    # Some transformations gave this, print it out
+                    print '  NEGATIVE pixel coordinate !!!'
+
                 else:
-                    self.cutouts.append(fname_fits)
 
-                # As .PNG
-                # -------
+                    # Do not mark anything
+                    print ''
 
-                # re-scale intensities (should only be done for the .png
-                # images)
-                cutout_slice = lingray(cutout_slice)
-                # cutout_slice = lingray(np.log10(cutout_slice))
-
-                # Normalise
-                cutout_slice = cutout_slice / cutout_slice.sum()
-
-                # Save the image
-                fname_png = date_str + '.png'
-                ofname_png = os.path.join(self.path('png'), fname_png)
-                misc.imsave(ofname_png, cutout_slice)
-
-            # OK, the coordinate was not far enough from the edge of the image
-            # to make a cutout
-            elif y < 0 or x < 0:
-
-                # Some transformations gave this, print it out
-                print '  NEGATIVE pixel coordinate !!!'
-
-            else:
-
-                # Do not mark anything
-                print ''
-
-            hdulist.close()
+                hdulist.close()
 
         # Summary
         # -------
@@ -989,14 +1009,11 @@ class CutoutSequence(object):
             msg('Saving cutout data')
 
             # This is what I need for cutout_overview()
-            opath = self.path('coord')
-            ofname_cutouts = os.path.join(opath, 'cutouts.csv')
             with open(ofname_cutouts, 'w+') as fsock:
                 fstr = '{},{}\n'
                 for (c, d) in zip(self.cutouts, self.cutout_dates):
                     fsock.write(fstr.format(d.isoformat(), c))
 
-            ofname_pxmax = os.path.join(opath, 'pxmax.dat')
             with open(ofname_pxmax, 'w+') as fsock:
                 fsock.write('\n'.join(np.array(self.pxmax).astype(str)))
 
@@ -1601,7 +1618,7 @@ def plot_covering(radec, fields, opath):
 
     # Make copies of these arrays for the visualisation
     df_vis = fields.copy()
-    radec_vis = radec.copy()
+    radec_vis = radec.copy().flatten()
 
     # Translate the coordinate
     df_vis.raMax[subtract_ix] -= 360
@@ -1646,7 +1663,7 @@ def plot_covering(radec, fields, opath):
     # BOTTOM plot
     for i, (dmn, dmx) in enumerate(zip(fields.decMin, fields.decMax)):
         ax3.plot([i] * 2, [dmn, dmx])
-    ax3.axhline(y=radec[1], c='w')
+    ax3.axhline(y=radec_vis[1], c='w')
     ax3.set_xlabel(rmath('Frame index'))
     ax3.set_ylabel(r'$\delta\ /\ \mathrm{deg}$')
 
@@ -1731,7 +1748,7 @@ def plot_pixel_indices(co):
 def plot_time_coverage(cutout_dates, opath):
 
     from mplconf import mplrc
-    # from mplconf import rmath
+    from mplconf import rmath
 
     mplrc('publish_digital')
 
@@ -1750,12 +1767,46 @@ def plot_time_coverage(cutout_dates, opath):
     ax1.xaxis.set_major_formatter(mpl.dates.DateFormatter('%Y'))
     ax1.xaxis.set_major_locator(mpl.dates.YearLocator())
     ax1.set_yticklabels([])
+    ax1.set_xlabel(rmath('Time'))
 
-    ax2.hist(np.log10(cutout_mdates_diff))
-    plt.draw()
-    xticklabels = [10 ** float(t.get_text().replace(u'\u2212', u'-')) for t in ax2.get_xticklabels()]
+    # ax2.hist(np.log10(cutout_mdates_diff))
+    # plt.draw() # Maybe this caused the DISPLAY error? (Drawing before saving specifically with pdf/png backend)
+    # xticklabels = [10 ** float(t.get_text().replace(u'\u2212', u'-')) for t in ax2.get_xticklabels()]
+    # ax2.set_xticklabels(xticklabels)
+
+    # bins = [.0001, .001, .01, .1, 1, 10, 100, 1000, 10000]
+    bins = np.logspace(-4, 4, 9)
+    ax2.hist(cutout_mdates_diff, bins=bins)
+    ax2.set_xscale('log')
+    ax2.grid(b=False, which='minor')
+    ax2.set_xlabel(rmath('Number of days between observations'))
     # print xticklabels
-    ax2.set_xticklabels(xticklabels)
+
+    if 1:
+        fig.set_size_inches(15., 4 * 1.5)
+        # fig.subplots_adjust(bottom=0.25)
+        ax3 = ax2.twiny()
+        ax3.set_frame_on(True)
+        ax3.patch.set_visible(False)
+        for spine in ax3.spines.itervalues():
+             spine.set_visible(False)
+        ax3b = ax3.spines['bottom']
+        ax3b.set_visible(True)
+        ax3b.set_position(('axes', -0.35))
+        ax3b.axis.set_label_position('bottom')
+        ax3b.axis.set_ticks_position('bottom')
+
+        ax3.grid(b=False, which='both')
+        ax3.set_xscale('log')
+        locs = [1. / (24. * 60.), 1. / 24., 1., 30., 365., 365. * 5]
+        lbls = ['1 m', '1 h', '1 d', '1 m', '1 yr', '5 yr']
+        ax3.xaxis.set_ticks(locs)
+        ax3.xaxis.set_ticks([], minor=True)
+        ax3.xaxis.set_ticklabels(lbls)
+        ax3.set_xlim(bins.min(), bins.max())
+        ax3.set_xlabel(rmath('Time between observations'))
+
+    # Add twiny axis which gives the time in human-readable format
 
     fig.tight_layout()
     # Save it in the dimension subdirectory as above.
@@ -2129,7 +2180,7 @@ def update_tlist(css, targets):
 
     # First save a copy of the original tlist, if not done already
     fname_tlist_backup = env.files.get('tlist') \
-                            + '.backup' + dt.datetime.isoformat()
+                            + '.backup.' + dt.datetime.now().isoformat()
     shutil.copyfile(env.files.get('tlist'), fname_tlist_backup)
 
     # Now that it is saved, the possibly changed list can be saved as tlist.
@@ -2143,6 +2194,49 @@ def update_tlist(css, targets):
 
     # Write to disk
     tlist.to_csv(env.files.get('tlist'), index=False, headers=True)
+
+
+def log_tlist_initialise():
+    """
+    Prepare a fresh log file for the latest run of create_cutout_data().
+
+    """
+    import shutil
+
+    # First save a copy of the original tlist, if not done already
+    fname_backup = env.files.get('log_tlist') \
+                            + '.backup.' + dt.datetime.now().isoformat()
+    shutil.copyfile(env.files.get('log_tlist'), fname_backup)
+
+    columns = [
+        'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
+    ]
+
+    # Save the column names
+    with open(env.files.get('log_tlist'), 'w+') as fsock:
+        fsock.write('{}\n'.format(','.join(columns)))
+
+
+
+def log_tlist_stats(cs=None):
+    if cs is not None:
+
+        if not os.path.isfile(env.files.get('log_tlist')):
+            log_tlist_initialise()
+
+        # Get the information
+        Ra, Dec = cs.radec.flatten()
+        is_sn = int(cs.is_sn)
+        N_fields = cs.fields.shape[0]
+        N_frames = len(cs.frames)
+        N_cutouts = len(cs.cutouts)
+        line = [
+            str(d)
+            for d in (Ra, Dec, is_sn, N_fields, N_frames, N_cutouts)
+        ]
+
+        with open(env.files.get('log_tlist'), 'a') as fsock:
+            fsock.write('{}\n'.format(','.join(line)))
 
 
 def get_cutout_sequences():
@@ -2185,44 +2279,26 @@ def get_cutout_sequences():
     return np.array(cutout_sequences), np.array(targets)
 
 
-def log_tlist_stats(cs=None):
-    if cs is not None:
-
-        if not os.path.isfile(env.files.get('log_tlist')):
-
-            columns = [
-                'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
-            ]
-
-            # Save the column names
-            with open(env.files.get('log_tlist'), 'w+') as fsock:
-                fsock.write('{}\n'.format(','.join(columns)))
-
-        # Get the information
-        Ra, Dec = cs.radec.flatten()
-        is_sn = int(cs.is_sn)
-        N_fields = cs.fields.shape[0]
-        N_frames = cs.frames.shape[0]
-        N_cutouts = len(cs.cutouts)
-        line = [
-            str(d)
-            for d in (Ra, Dec, is_sn, N_fields, N_frames, N_cutouts)
-        ]
-
-        with open(env.files.get('log_tlist'), 'a') as fsock:
-            fsock.write('{}\n'.format(','.join(line)))
-
-
 def create_cutout_data():
     """
     Initialise directories and create data for analysis.
 
     """
+
+    # Create a new log file
+    log_tlist_initialise()
+
+    # Load the data
     css, targets = get_cutout_sequences()
+
+    # Run through each sequence
     for i, cs in enumerate(css):
+
         # print '{: >3d}'.format(i)
+
         msg('', char=' ')
         msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
+
         no_cutouts_made = True
         while no_cutouts_made:
 
@@ -2277,7 +2353,7 @@ def create_cutout_data():
         # Outside of outer while loop, but inside for loop.
         # change the entry css
         css[i] = cs
-        targets[i] = int(cs.is_cn)
+        targets[i] = int(cs.is_sn)
 
         # Save the stats for this instance
         log_tlist_stats(cs)
@@ -2294,6 +2370,15 @@ def do_grid_search(N_folds=5):
     Status
     ------
     Testing
+
+    Future
+    ------
+    * Write more of the intermediate data to disk and calculate the accuracies
+      directly from these.
+
+    * Test successfully on server
+    * Test successfully with N-fold (rather than 1-fold) CV
+    * Run successfully with 5-fold CV on the server.
 
     """
 
