@@ -129,6 +129,12 @@ class CutoutSequence(object):
         msg('Creating directories')
         self.create_directories()
 
+        # Is this instance flagged?
+        if self.flagged:
+            # Then stop here
+            err = 'CutoutSequence is flagged!'
+            raise CutoutSequenceError(err)
+
         # Create a dictionary for saved steps
         self._file = {}
 
