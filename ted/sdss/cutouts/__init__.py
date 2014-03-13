@@ -7,59 +7,57 @@
 """
 Create cutouts around a point in the sky.
 
-
 """
 
-# from __future__ import unicode_literals
+# from __future__ import unicode_literals # Some numpy functionality crashes,
 # from __future__ import print_function
 
 import os
 import datetime as dt
-# import collections as cs
 
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
-"""
-Must declare the backend beforehand, since running the program on the
-imageserver gives problems with the DISPLAY environment variable, when for some
-reason saving as .pdf invokes the qt4 backend which requires a running
-X server (which is not installed on the image(disk)servers) :/
-
-This problem only occurs, when I run the program with Office Grid, not when I
-generate the same figures using my IPython notebook server using the same code.
-
-"""
-mpl.use('pdf')
-import matplotlib.pyplot as plt
 from astropy import wcs
 from astropy.io import fits
 import scipy.misc as misc
 import yaml
 
-# .. : ted
-from .. import msg
-from .. import env
-from .. import TEDError
+# ... : ted
+from ... import msg
+from ... import env
+from ... import TEDError
 
-# from ..time import mjd2date
-from ..time import tai2date
-from ..image import lingray
+# from ...time import mjd2date
+from ...time import tai2date
+from ...image import lingray
 
 # . : sdss
 # from . import iscoadded
-from .das import frame_path
+from ..das import frame_path
 # from .aux import HTML_create_cutout_display
-from .stripe82 import (
-    ra_min, ra_max,
-    # dec_min, dec_max,
-    # stripe_width, stripe_height,
-    stripe_extent_ra, stripe_extent_dec, w2h
-)
+
+from .plotting import plot_covering
+from .plotting import plot_possible_cutouts
+from .plotting import plot_pixel_indices
+from .plotting import plot_time_coverage
+from .plotting import plot_background_models
+
+if 0:
+    from .plotting import plot_residual_samples
+    from .plotting import plot_LoG_samples
+    from .plotting import plot_binary_fields
+
+# from .plotting import plot_histogram_intensity
+
+# from .plotting import plot_histogram_LoG
+
+# from .plotting import plot_histogram_ranked_LoG
+
 
 
 class FITSHeaderError(TEDError): pass
 class CutoutSequenceError(TEDError): pass
+
 
 class CutoutSequence(object):
     """
@@ -210,7 +208,6 @@ class CutoutSequence(object):
 
         Steps
         -----
-        * Create directories for the cutout sequence.
         * Load all fields and select those that cover the given coordinate.
         * Based on the list of covering fields, obtain filenames of valid
           FITS files that can be loaded. (Check file integrity for each
@@ -220,7 +217,6 @@ class CutoutSequence(object):
           given coordinate, create a cutout and save it and .PNG and .fit.gz.
         * Gunzip the raw cutouts before registration (WCSREMAP requires this).
         * Perform WCS-registration using the first-recorded frame as template.
-        * Create background models.
 
         The registered cutouts can now be loaded into a datacube for analysis.
 
@@ -244,7 +240,7 @@ class CutoutSequence(object):
         # imagerserver[1-3], I am leaving out the steps that try to download
         # missing or corrupted files.
         msg('Getting consistent frames')
-        self.get_consistent_frames(attempt_download=False)
+        self.get_consistent_frames()
 
         # Selection III
         # Selects frames for which a cutout can be made.
@@ -302,6 +298,9 @@ class CutoutSequence(object):
         # Create background models
         # mean and median
         self.calculate_background_models()
+
+        # Make output
+        plot_background_models(self)
 
         # Residuals
         self.calculate_residuals(bg_model=bg_model)
@@ -444,7 +443,7 @@ class CutoutSequence(object):
             self.fields.shape[0], self.crd_str)
         )
 
-    def get_consistent_frames(self, attempt_download=True):
+    def get_consistent_frames(self):
         """
         Check the consistency of each file.
 
@@ -544,7 +543,7 @@ class CutoutSequence(object):
                     fsock.write('\n'.join(getattr(self, key)))
 
         fstr = 'Of {:d} covering fields, {:d} are valid'
-        fstr += ' AND non-co-added FITS files'
+        fstr += ' AND non-coadded FITS files'
         msg(fstr.format(self.fields.shape[0], len(self.frames)))
 
     # @logged
@@ -582,20 +581,56 @@ class CutoutSequence(object):
 
         ofname_cutouts = os.path.join(self.path('coord'), 'cutouts.csv')
         ofname_pxmax = os.path.join(self.path('coord'), 'pxmax.dat')
+        ofname_pxcrd = os.path.join(self.path('coord'), 'pxcrd.csv')
+        ofname_pxcrd_all = os.path.join(self.path('coord'), 'pxcrd_all.csv')
 
-        if os.path.isfile(ofname_cutouts) and os.path.isfile(ofname_pxmax):
+        if (os.path.isfile(ofname_cutouts)
+            and
+            os.path.isfile(ofname_pxmax)
+            and
+            os.path.isfile(ofname_pxcrd)
+            and
+            os.path.isfile(ofname_pxcrd_all)):
 
             def s2d(s):
                 for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
                     try: return dt.datetime.strptime(s, fmt)
                     except: continue
 
+            # Load max cutout px size
             self.pxmax = list(np.loadtxt(ofname_pxmax))
+
+            # Load cutout dates and filenames
             dtype = [('datetime', dt.datetime), ('cutouts', str)]
             lkw = dict(converters={0:s2d}, delimiter=',', dtype=dtype)
             data = np.loadtxt(ofname_cutouts, **lkw)
             self.cutout_dates, self.cutouts = [data[name]
                                                 for name in data.dtype.names]
+
+            # Load row and col pixel indices
+            # cutouts only
+            ds = ['row_ixes', 'col_ixes',]
+            ts = [int] * 2
+            dtype = [(d, t) for (d, t) in zip(ds, ts)]
+            lkw = dict(delimiter=',', dtype=dtype)
+            data = np.loadtxt(ofname_pxcrd, **lkw)
+            self.row_ixes_all,
+            self.col_ixes_all = [data[name] for name in data.dtype.names]
+
+            # Load row and col pixel indices
+            # ALL frames
+            ds = [
+                'row_ixes_all', 'col_ixes_all',
+                'row_ixes_all_r', 'col_ixes_all_r',
+            ]
+            ts = [int] * 4
+            dtype = [(d, t) for (d, t) in zip(ds, ts)]
+            lkw = dict(delimiter=',', dtype=dtype)
+            data = np.loadtxt(ofname_pxcrd, **lkw)
+            self.row_ixes_all,
+            self.col_ixes_all,
+            self.row_ixes_all_r,
+            self.col_ixes_all_r = [data[name] for name in data.dtype.names]
 
         else:
 
@@ -655,18 +690,18 @@ class CutoutSequence(object):
             # All the returned pixel coordinates when the order of the input coord-
             # inates are consistently (RA, Dec), and the returned pixel coordinates
             # are consistently assumed to be (col_ix, row_ix)
-            row_ixes_all = []
-            col_ixes_all = []
+            self.row_ixes_all = []
+            self.col_ixes_all = []
 
             # All the returned pixel coordinates when the order of the input coord-
             # inates are consistently (RA, Dec), and the returned pixel coordinates
             # are consistently assumed to be (col_ix, row_ix)
-            row_ixes_all_r = []
-            col_ixes_all_r = []
+            self.row_ixes_all_r = []
+            self.col_ixes_all_r = []
 
             # Actual, used row and col indices of the cutouts that can be made
-            row_ixes = []
-            col_ixes = []
+            self.row_ixes = []
+            self.col_ixes = []
 
             # Clean up
             # --------
@@ -786,11 +821,11 @@ class CutoutSequence(object):
                         x, y = pixels[0, 0], pixels[0, 1]
 
                         # Save all indices for debugging
-                        col_ixes_all.append(x)
-                        row_ixes_all.append(y)
+                        self.col_ixes_all.append(x)
+                        self.row_ixes_all.append(y)
 
-                        col_ixes_all_r.append(pixels_r[0, 0])
-                        row_ixes_all_r.append(pixels_r[0, 1])
+                        self.col_ixes_all_r.append(pixels_r[0, 0])
+                        self.row_ixes_all_r.append(pixels_r[0, 1])
 
                     else:
                         # Still columns first
@@ -798,11 +833,11 @@ class CutoutSequence(object):
 
                         # Save all indices for debugging
                         # Notice that the post fixes ('', '_r') are switched
-                        col_ixes_all.append(x)
-                        row_ixes_all.append(y)
+                        self.col_ixes_all.append(x)
+                        self.row_ixes_all.append(y)
 
-                        row_ixes_all_r.append(pixels[0, 0])
-                        col_ixes_all_r.append(pixels[0, 1])
+                        self.row_ixes_all_r.append(pixels[0, 0])
+                        self.col_ixes_all_r.append(pixels[0, 1])
 
                 else:
 
@@ -819,22 +854,22 @@ class CutoutSequence(object):
                         y, x = pixels[0, 0], pixels[0, 1]
 
                         # Save all indices for debugging
-                        col_ixes_all.append(x)
-                        row_ixes_all.append(y)
+                        self.col_ixes_all.append(x)
+                        self.row_ixes_all.append(y)
 
-                        col_ixes_all_r.append(pixels_r[0, 0])
-                        row_ixes_all_r.append(pixels_r[0, 1])
+                        self.col_ixes_all_r.append(pixels_r[0, 0])
+                        self.row_ixes_all_r.append(pixels_r[0, 1])
 
                     else:
                         x, y = pixels_r[0, 0], pixels_r[0, 1]
 
                         # Save all indices for debugging
                         # Notice that the post fixes ('', '_r') are switched
-                        col_ixes_all.append(x)
-                        row_ixes_all.append(y)
+                        self.col_ixes_all.append(x)
+                        self.row_ixes_all.append(y)
 
-                        row_ixes_all_r.append(pixels[0, 0])
-                        col_ixes_all_r.append(pixels[0, 1])
+                        self.row_ixes_all_r.append(pixels[0, 0])
+                        self.col_ixes_all_r.append(pixels[0, 1])
 
                 # Now we have the x (data col) and y (data row) coordinates for the
                 # image data (in NumPy coordinates)
@@ -867,8 +902,8 @@ class CutoutSequence(object):
                     print '*'
 
                     # Append the pixel coordinates for plotting below
-                    row_ixes.append(y)
-                    col_ixes.append(x)
+                    self.row_ixes.append(y)
+                    self.col_ixes.append(x)
 
                     # Save the index for the included input file
                     frames_used_ix.append(i)
@@ -1015,19 +1050,34 @@ class CutoutSequence(object):
             msg('Saving cutout data')
 
             # This is what I need for cutout_overview()
+
+            # Save cutout dates and filenames
             with open(ofname_cutouts, 'w+') as fsock:
                 fstr = '{},{}\n'
                 for (c, d) in zip(self.cutouts, self.cutout_dates):
                     fsock.write(fstr.format(d.isoformat(), c))
 
+            # Load max cutout px size
             with open(ofname_pxmax, 'w+') as fsock:
                 fsock.write('\n'.join(np.array(self.pxmax).astype(str)))
+
+            # Load row and col pixel indices (cutouts only)
+            data = np.array([self.row_ixes, self.col_ixes]).T
+            np.savetxt(ofname_pxcrd, data, delimiter=',')
+
+            # Load row and col pixel indices (ALL frames)
+            data = np.array([
+                self.row_ixes_all, self.col_ixes_all,
+                self.row_ixes_all_r, self.col_ixes_all_r,
+            ]).T
+            np.savetxt(ofname_pxcrd_all, data, delimiter=',')
 
             msg('Creating plots for visual inspection')
 
             # Create plots for visual inspection
             plot_time_coverage(self.cutout_dates, opath=self.path('coord'))
             plot_possible_cutouts(self.pxmax, opath=self.path('coord'))
+            plot_pixel_indices(self, opath=self.path('coord'))
 
         else:
             msg('Not enough cutouts could be made (only {:d})'.format(
@@ -1037,9 +1087,10 @@ class CutoutSequence(object):
             self.flag()
 
             """
-            Must stop here and return a value to the program that created this
-            instance and tell it to flag this coordinate and pick a new (non-
-            flagged) one.
+            Must stop here and return a value to the program that created
+            this instance and tell it to flag this coordinate and pick a
+            new (non-flagged) one.
+
             No need to flag the ones that are inluded in tlist to begin with.
 
             """
@@ -1607,227 +1658,14 @@ def get_covering_fields(radec):
 
 # ---
 
-
-def plot_covering(radec, fields, opath):
-    """
-    Visualise selection
-
-    """
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Get indices for those fields that have RA \in [300; 360]
-    subtract_ix = fields.raMax > ra_max
-
-    # Make copies of these arrays for the visualisation
-    df_vis = fields.copy()
-    radec_vis = radec.copy().flatten()
-
-    # Translate the coordinate
-    df_vis.raMax[subtract_ix] -= 360
-    df_vis.raMin[subtract_ix] -= 360
-
-    # Only if there wore any subtrations to be made,
-    # subtract 360 from the chosen coordinate so that
-    # its position in the stripe can be visualised.
-    if subtract_ix.sum():
-        radec_vis[0] -= 360
-
-    # Prepare plot input
-    pkw = dict(mec='None', mfc='w', ls='None', marker='o', ms=5)
-    rkw = dict(fill=True, fc=mpl.rcParams['axes.color_cycle'][0], ec='None', alpha=.3)
-
-    # fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15., 15. * 8 / w2h * 2))
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15., 15. * 8 / w2h * 3))
-
-    # TOP plot
-    # For each covering field
-    for i in range(df_vis.shape[0]):
-        cov_ramin, cov_ramax = df_vis.raMin.iloc[i], df_vis.raMax.iloc[i]
-        cov_decmin, cov_decmax = df_vis.decMin.iloc[i], df_vis.decMax.iloc[i]
-        dra, ddec = (cov_ramax - cov_ramin), (cov_decmax - cov_decmin)
-        ax1.add_patch(mpl.patches.Rectangle((cov_ramin, cov_decmin), dra, ddec, **rkw))
-    ax1.plot([radec_vis[0]], [radec_vis[1]], **pkw)
-    ax1.plot(stripe_extent_ra, stripe_extent_dec, c=mpl.rcParams['axes.color_cycle'][1])
-    ax1.set_xlim(ra_max + 1, ra_min - 1)
-    ax1.set_xlabel(r'$\alpha\ /\ \mathrm{deg}$')
-    ax1.set_ylabel(r'$\delta\ /\ \mathrm{deg}$')
-
-    # MIDDLE plot
-    for i, (rmn, rmx) in enumerate(zip(df_vis.raMin, df_vis.raMax)):
-        ax2.plot([rmn, rmx], [i] * 2)
-    ax2.axvline(x=radec_vis[0], c='w')
-    ax2.set_xlim(*ax2.get_xlim()[::-1])
-    ax2.set_xlabel(r'$\alpha\ /\ \mathrm{deg}$')
-    ax2.set_ylabel(rmath('Frame index'))
-    # ax2.ticklabel_format(scilimits=(-10, 10))
-    ax2.xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.2f'))
-
-    # BOTTOM plot
-    for i, (dmn, dmx) in enumerate(zip(fields.decMin, fields.decMax)):
-        ax3.plot([i] * 2, [dmn, dmx])
-    ax3.axhline(y=radec_vis[1], c='w')
-    ax3.set_xlabel(rmath('Frame index'))
-    ax3.set_ylabel(r'$\delta\ /\ \mathrm{deg}$')
-
-    fig.tight_layout()
-
-    # Save it
-    plt.savefig(os.path.join(opath, 'coverage.pdf'))
-    # plt.savefig(os.path.join(opath, 'coverage.png'), dpi=72)
-
-
-def plot_possible_cutouts(pxmax, opath):
-    """
-    POSIBLE Cutouts
-        # cutout_overview()
-    """
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # How many cutouts of a given pixel side length can be made
-    # out of the covering frames of the given coordinate?
-
-    # NB: These are not all the covering images from the initial selection (Selection I)
-    #     They are only those images that allowed for the given cutout size, e.g. 101x101.
-
-    nbins = 100
-
-    # for i, pxsz in enumerate(pxmax):
-    #     print i, pxsz
-
-    fig, ax = plt.subplots(1, 1, figsize=(15., 4))
-
-    h = ax.hist(pxmax, bins=np.linspace(0, 1489, nbins + 1), zorder=10)
-
-    Hcum = np.cumsum(h[0][::-1])[::-1]
-    Hoff = h[1][:-1]
-    Hkw = dict(alpha=.5, fc=mpl.rcParams['axes.color_cycle'][1])
-    ax.bar(left=Hoff, height=Hcum, width=Hoff[1] - Hoff[0], **Hkw)
-
-    ax.set_ylabel(rmath('No. of frames with cutout size possible'))
-    ax.set_xlabel(rmath('Cutout side length in pixels'))
-
-    # ax.set_xlim(.0, 1500.)
-    ax.set_xlim(ax.get_xlim()[0], 1500.)
-
-    fig.tight_layout()
-
-    plt.savefig(os.path.join(opath, 'max_cutout_size.pdf'))
-    # plt.savefig(os.path.join(opath, 'max_cutout_size.png'), dpi=72)
-
-
-def plot_pixel_indices(co):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    pkw = dict(ls='none', marker='o', ms=12, mec='None', alpha=.8)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15., 15. * 1489. / 2048. / 2))
-
-    ax1.plot(co.col_ixes_all, co.row_ixes_all, **pkw)
-    ax1.plot(co.col_ixes, co.row_ixes, **pkw)
-    ax1.set_xlim(0, 2048 - 1)
-    ax1.set_ylim(1489 - 1, 0)
-
-    ax2.plot(co.col_ixes_all_r, co.row_ixes_all_r, **pkw)
-
-    ax1.set_ylabel(rmath('y px coordinate'))
-    for ax in (ax1, ax2):
-        ax.set_xlabel(rmath('x px coordinate'))
-
-    fig.tight_layout()
-
-    plt.savefig(os.path.join(co.path('dim'), 'pixel_indices_joint.pdf'))
-    # plt.savefig(os.path.join(co.path('dim'), 'pixel_indices_joint.png'), dpi=72)
-
-
-def plot_time_coverage(cutout_dates, opath):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Get matplotlib dates for the timeline
-    cutout_mdates = mpl.dates.date2num(sorted(cutout_dates))
-    cutout_mdates_diff = cutout_mdates[1:] - cutout_mdates[:-1]
-    # cmdiff_mean = cutout_mdates_diff.mean()
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15., 4))
-
-    ax1.axhline(y=1., c=mpl.rcParams['axes.color_cycle'][0])
-    for mdate in cutout_mdates:
-        ax1.axvline(x=mdate, ymin=.45, ymax=.55, lw=1., c=mpl.rcParams['axes.color_cycle'][1])
-    ax1.set_xlim(cutout_mdates.min(), cutout_mdates.max())
-    ax1.set_ylim(.0, 2.)
-    ax1.xaxis.set_major_formatter(mpl.dates.DateFormatter('%Y'))
-    ax1.xaxis.set_major_locator(mpl.dates.YearLocator())
-    ax1.set_yticklabels([])
-    ax1.set_xlabel(rmath('Time'))
-
-    # ax2.hist(np.log10(cutout_mdates_diff))
-    # plt.draw() # Maybe this caused the DISPLAY error? (Drawing before saving specifically with pdf/png backend)
-    # xticklabels = [10 ** float(t.get_text().replace(u'\u2212', u'-')) for t in ax2.get_xticklabels()]
-    # ax2.set_xticklabels(xticklabels)
-
-    # bins = [.0001, .001, .01, .1, 1, 10, 100, 1000, 10000]
-    bins = np.logspace(-4, 4, 9)
-    ax2.hist(cutout_mdates_diff, bins=bins)
-    ax2.set_xscale('log')
-    ax2.grid(b=False, which='minor')
-    ax2.set_xlabel(rmath('Number of days between observations'))
-    # print xticklabels
-
-    if 1:
-        fig.set_size_inches(15., 4 * 1.5)
-        # fig.subplots_adjust(bottom=0.25)
-        ax3 = ax2.twiny()
-        ax3.set_frame_on(True)
-        ax3.patch.set_visible(False)
-        for spine in ax3.spines.itervalues():
-             spine.set_visible(False)
-        ax3b = ax3.spines['bottom']
-        ax3b.set_visible(True)
-        ax3b.set_position(('axes', -0.35))
-        ax3b.axis.set_label_position('bottom')
-        ax3b.axis.set_ticks_position('bottom')
-
-        ax3.grid(b=False, which='both')
-        ax3.set_xscale('log')
-        locs = [1. / (24. * 60.), 1. / 24., 1., 30., 365., 365. * 5]
-        lbls = ['1 m', '1 h', '1 d', '1 m', '1 yr', '5 yr']
-        ax3.xaxis.set_ticks(locs)
-        ax3.xaxis.set_ticks([], minor=True)
-        ax3.xaxis.set_ticklabels(lbls)
-        ax3.set_xlim(bins.min(), bins.max())
-        ax3.set_xlabel(rmath('Time between observations'))
-
-    # Add twiny axis which gives the time in human-readable format
-
-    fig.tight_layout()
-    # Save it in the dimension subdirectory as above.
-    plt.savefig(os.path.join(opath, 'stats.pdf'))
-    # plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
-
-
 def write_cutout_sequence_summary(cs):
 
     summary = ''
     summary += 'SUMMARY\n'
     summary += '\nSky coordinate: (RA, Dec) = ({:4f}, {:4f})'.format(*cs.radec)
-    summary += '\n\nInitial number of covering frames: {}'.format(cs.fields.count().max())
-    summary += '\nCo-added frames (left out for now): {}'.format(len(cs.coadded))
-    summary += '\nNon-existing file: {}'.format(len(cs.notfiles))
+    summary += '\n\nInitial number of covering frames: {}'.format(cs.fields.shape[0])
+    summary += '\nCo-added frames (left out for now): {}'.format(len(cs.frames_coadded))
+    summary += '\nNon-existing file: {}'.format(len(cs.frames_nonexistent))
     summary += '\nValid files to use for processing cutouts: {}'.format(len(cs.files))
     summary += '\n\nCutout dimension (rows, cols) = ({}, {})'.format(*cs.size)
     summary += '\nPossible cutouts with this dimension: {}'.format(len(cs.cutout_files))
@@ -1837,336 +1675,13 @@ def write_cutout_sequence_summary(cs):
     #     (cmdiff_mean % 1) * 24
     # )
 
-    ofname_summary = os.path.join(cs.path('dim'), 'summary.txt')
+    ofname_summary = os.path.join(cs.path('coord'), 'summary.txt')
     with open(ofname_summary, 'w+') as fsock:
         fsock.write(summary)
 
     print summary
 
-
-def plot_background_models(cs):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Set common vmin and vmax
-    vmin = 0.
-    vmax = np.max([cs.template_median.max(), cs.template_mean.max()])
-    print vmax, np.log10(vmax)
-
-    # Choose overall colour map
-    cmap = mpl.cm.cubehelix
-
-    # extent : None | (left, right, bottom, top)
-    # default : assigns zero-based row, column indices
-    #           to the `x`, `y` centers of the pixels
-    extent = [0, cs.cube_shape[0] - 1, 0, cs.cube_shape[1] - 1]
-
-    imkw = dict(cmap=cmap, interpolation='nearest')
-    imkw.update(aspect='equal')  # , origin='lower')
-    # extent = [0, cutout_size[0] - 1, 0, cutout_size[1] - 1]
-    imkw.update(extent=extent)
-
-    cbkw = dict(extend='neither', drawedges=False)
-    cbkw.update(pad=.005, orientation='horizontal')
-
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15., 5.))
-
-    imkw.update(vmin=vmin, vmax=np.log10(vmax))
-    im1 = ax1.imshow(np.log10(cs.template_median), **imkw)
-    im2 = ax2.imshow(np.log10(cs.template_mean), **imkw)
-    ax1.set_title(rmath('Log10(Median)'))
-    ax2.set_title(rmath('Log10(Mean)'))
-
-    imkw.update(vmin=vmin, vmax=vmax)
-    im3 = ax3.imshow(cs.template_median, **imkw)
-    im4 = ax4.imshow(cs.template_mean, **imkw)
-    ax3.set_title(rmath('Median'))
-    ax4.set_title(rmath('Mean'))
-
-    for ax, im in zip((ax1, ax2, ax3, ax4), (im1, im2, im3, im4)):
-        ax.set_axis_off()
-        # cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
-        fig.colorbar(mappable=im, ax=ax, **cbkw)
-
-    fig.tight_layout()
-    plt.savefig(os.path.join(cs.path('coord'), 'background_templates.pdf'))
-
-
-def plot_residual_sample(cs):
-
-    from mplconf import mplrc
-    # from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Show a sample of difference images
-
-    # Offset to start from
-    # Use it to see the change between SN present and not
-    offset = 13
-
-    # Use mask when plotting residuals
-    # cube_res = np.ma.masked_where(cutout_mask_3D, cube_residual)
-    cube_res = cs.cube_residual
-
-    vmin = cube_res[:, :, offset:offset + 4].min()
-    vmax = cube_res[:, :, offset:offset + 4].max()
-    print vmin, vmax
-
-    # cmap = mpl.cm.bone
-    cmap = mpl.cm.cubehelix
-
-    imkw = dict(cmap=cmap, interpolation='nearest')
-    imkw.update(aspect='equal')  # , origin='lower')
-    imkw.update(vmin=vmin, vmax=vmax)
-
-    fig, axes = plt.subplots(1, 4, figsize=(15., 5.))
-
-    cbkw = dict(extend='neither', drawedges=False)
-    cbkw.update(pad=.005, orientation='horizontal')
-
-    for i in range(4):
-        index = offset + i
-        im = axes[i].imshow(cube_res[:, :, index], **imkw)
-        axes[i].set_title('cube_res[:, :, {}]'.format(index))
-        axes[i].set_axis_off()
-        # cbar = fig.colorbar(mappable=im, ax=axes[i], **cbkw)
-        fig.colorbar(mappable=im, ax=axes[i], **cbkw)
-
-    fig.tight_layout()
-
-    ofname_check_residual = os.path.join(cs.path('results'), 'check_residual.pdf')
-    plt.savefig(ofname_check_residual)
-
-
-def plot_LoG_samples(self):
-
-    from mplconf import mplrc
-    # from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Plot a couple of LoG-filtered images to check if filter size is reasonable (clear spot when SN present)
-
-    # Also plot them as 3D surfaces to get a better feel for the toplogy of the the LoG-filtered difference images
-    from mpl_toolkits.mplot3d import axes3d
-
-    # Mask reference cube
-    #cube_ref = np.ma.masked_where(cutout_mask_3D, cube_LoG)
-    cube_ref = cube_LoG
-
-    # Use log-scale?
-    if 0:
-        cube_ref = np.log10(cube_ref)
-        title_fstr = 'Log10(cube_LoG[:, :, {}])'
-
-    else:
-        title_fstr = 'cube_LoG[:, :, {}]'
-
-    # Offset to start from
-    # Use it to see the change between SN present and not
-    offset = 13
-
-    vmin = cube_ref[:, :, offset:offset + 4].min()
-    vmax = cube_ref[:, :, offset:offset + 4].max()
-    print 'vmin = {:.2f}\nvmax = {:.2f}'.format(vmin, vmax)
-
-    cmap = mpl.cm.cubehelix
-
-    # Imshow kwargs
-    imkw = dict(cmap=cmap, interpolation='nearest')
-    imkw.update(aspect='equal')  # , origin='lower')
-    imkw.update(vmin=vmin, vmax=vmax)
-
-    # Axes3D kwargs
-    axkw = dict(cmap=cmap, rstride=5, cstride=5)
-    axkw.update(vmin=vmin, vmax=vmax)
-
-    # Colour bar kwargs
-    cbkw = dict(extend='neither', drawedges=False)
-    cbkw.update(pad=.005, orientation='horizontal')
-
-    # Coordinates
-    y = np.arange(cube_shape[0])
-    x = np.arange(cube_shape[1])
-    X, Y = np.meshgrid(x, y)
-
-    # Plot
-    fig = plt.figure(figsize=(15., 8))
-    # fig, axes = plt.subplots(1, 4, figsize=(15., 5.))
-
-    for i in range(4):
-
-        index = offset + i
-        j = i + 4
-
-        print i, j
-
-        axi = fig.add_subplot(241 + i)
-        axj = fig.add_subplot(241 + j, projection='3d')
-
-        # In the top row
-        im = axi.imshow(cube_ref[:, :, index], **imkw)
-        axi.set_title(title_fstr.format(index))
-        axi.set_axis_off()
-        cbar = fig.colorbar(mappable=im, ax=axi, **cbkw)
-
-        # In the bottom row
-        Z = cube_ref[:, :, index]
-        # axj.plot_wireframe(X, Y, Z, **axkw)
-        surf = axj.plot_surface(X, Y, Z,  **axkw)
-        # cbar = fig.colorbar(mappable=surf, ax=axes[i], **cbkw)
-        axj.set_zlim(vmin, vmax)
-
-    fig.tight_layout()
-
-    ofname_check_LoG = os.path.join(path_LoG, 'check_LoG.pdf')
-    plt.savefig(ofname_check_LoG)
-
-
-def plot_detection_sample(cs):
-    """
-    Plot and save image of each
-    """
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Plot I_min
-
-    cmap = mpl.cm.binary
-
-    # extent = [0, 80, 0, 80]
-    imkw = dict(cmap=cmap, interpolation='nearest')
-    imkw.update(aspect='equal')  # , origin='lower')
-    imkw.update(extent=extent)
-
-    pkw = dict(ls='None', marker='o', ms=12, mec='None', alpha=.5)
-    pkw.update(c=mpl.rcParams.get('axes.color_cycle')[1])
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11., 5.))
-
-    ax1.imshow(I_min, **imkw)
-    ax1.plot([40], [40], **pkw)
-    ax1.set_title(rmath('Minima'))
-
-    ax2.imshow(I_min_thres, **imkw)
-    ax2.plot([40], [40], **pkw)
-    ax2.set_title(rmath('Minima (intensity > threshold)'))
-
-    # for ax in (ax1, ax2):
-    #     ax.plot(padx, pady, c=mpl.rcParams.get('axes.color_cycle')[0])
-
-    fig.tight_layout()
-
-    ofname_check_minima = os.path.join(path_LoG, 'check_minima.pdf')
-    plt.savefig(ofname_check_minima)
-
-
-def plot_intensity_histogram(self):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # Find a suitable threshold
-
-    # Where are the True entries?
-    y_ix, x_ix = I_min.nonzero()
-
-    # The intensities of the LoG-minima
-    cube_masked = cube_remap[y_ix, x_ix, cut_ix]
-
-    # Indices of intensities that are larger than zero.
-    cix = cube_masked > 0
-
-    # Histogram of pixel values for the original remapped image
-    # pkw.update(c=mpl.rcParams.get('axes.color_cycle')[1])
-    fig, ax = plt.subplots(1, 1, figsize=(15., 4.))
-    h = ax.hist(cube_masked[cix], bins=50)
-    # ax.set_yscale('log')
-    ax.set_xlabel(rmath('Intensity'))
-    ax.set_ylabel(rmath('Count'))
-    ax.set_title(rmath('Pixel intensities from remapped frame'))
-    fig.tight_layout()
-
-    # print h[0]
-
-    ofname_check_intensities = os.path.join(path_LoG, 'check_intensities_remap.pdf')
-    plt.savefig(ofname_check_intensities)
-
-
-def plot_histogram_LoG(self):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # How are the LoG pixel values distributed?
-
-    LoG = cube_LoG[:, :, cut_ix]
-    # cix = LoG < np.inf
-    cix = LoG < -1
-
-    # Histogram of pixel values for the original remapped image
-    # pkw.update(c=mpl.rcParams.get('axes.color_cycle')[1])
-    fig, ax = plt.subplots(1, 1, figsize=(15., 4.))
-    # h = ax.hist(array1D_LoG, bins=50)
-    # h = ax.hist(cube_LoG[:, :, cut_ix].flat, bins=50)
-    h = ax.hist(LoG[cix], bins=50)
-    # ax.set_yscale('log')
-    ax.set_title(rmath('Pixel intensities of the LoG-filtered residual'))
-    fig.tight_layout()
-
-    # print h[0]
-
-    ofname_check_intensities = os.path.join(path_LoG, 'check_intensities_LoG.pdf')
-    plt.savefig(ofname_check_intensities)
-
-
-def plot_histogram_ranked_LoG(self):
-
-    from mplconf import mplrc
-    from mplconf import rmath
-
-    mplrc('publish_digital')
-
-    # How are the relative changes in pixel intensity of the ranked and sorted LoG values distributed?
-
-    LoGs = LoG.copy().flatten()
-    # print LoGs.shape
-    LoGs.sort()
-    # print LoGs[0], LoGs[-1]
-
-    # Relative differences
-    N_rel = 10
-    LoGr = LoGs[:N_rel] / LoGs[1:N_rel + 1] - 1.
-
-    print '; '.join(['{:.5%}'.format(R) for R in LoGr])
-
-
-    if 0:
-        # Histogram of pixel values for the original remapped image
-        # pkw.update(c=mpl.rcParams.get('axes.color_cycle')[1])
-        fig, ax = plt.subplots(1, 1, figsize=(15., 4.))
-        # h = ax.hist(array1D_LoG, bins=50)
-        # h = ax.hist(cube_LoG[:, :, cut_ix].flat, bins=50)
-        h = ax.hist(LoG[cix], bins=50)
-        # ax.set_yscale('log')
-        ax.set_title(rmath('Pixel intensities of the LoG-filtered residual'))
-        fig.tight_layout()
-
-        # print h[0]
-
-        ofname_check_intensities = os.path.join(opath, 'check_intensities_LoG.pdf')
-        plt.savefig(ofname_check_intensities)
+# ---
 
 # Control programs
 # ----------------
