@@ -53,15 +53,14 @@ import yaml
 # )
 
 
-class TEDError(Exception): pass
-class EnvironmentLoadError(TEDError): pass
-class NoneExistingFileError(TEDError): pass
-
 # _pkg_home_dir = __path__[0] if __path__ else os.path.dirname(os.path.realpath(__file__))
-
 # __path__ is not automatically defined, when simply running this file.
 _pkg_home_dir = os.path.dirname(os.path.realpath(__file__))
 
+
+class TEDError(Exception): pass
+class EnvironmentLoadError(TEDError): pass
+class NoneExistingFileError(TEDError): pass
 
 # class TEDRelPath(yaml.YAMLObject, list):
 
