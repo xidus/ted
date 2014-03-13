@@ -1722,12 +1722,16 @@ def log_tlist_initialise():
     Prepare a fresh log file for the latest run of create_cutout_data().
 
     """
-    import shutil
 
-    # First save a copy of the original tlist, if not done already
-    fname_backup = env.files.get('log_tlist') \
-                            + '.backup.' + dt.datetime.now().isoformat()
-    shutil.copyfile(env.files.get('log_tlist'), fname_backup)
+    if os.path.isfile(env.files.get('log_tlist')):
+
+        # Save a copy of the original tlist, if not done already
+
+        import shutil
+
+        fname_backup = env.files.get('log_tlist') \
+                                + '.backup.' + dt.datetime.now().isoformat()
+        shutil.copyfile(env.files.get('log_tlist'), fname_backup)
 
     columns = [
         'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
