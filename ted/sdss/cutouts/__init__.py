@@ -652,14 +652,6 @@ class CutoutSequence(object):
             # Filenames of files which the program failed to write to disk.
             cutouts_failed_writes = []
 
-            # Formats used to read and write formatted dates
-            fmts = [
-                '%Y-%m-%dT%H:%M:%S',
-                '%Y-%m-%d',
-                '%y/%m/%d',
-            #     '%H:%M:%S',
-            ]
-
             # For finding out what the largest possible cutout size is which
             # allows for a descent number of cutouts.
             # What is the largest possible pixel side length possible for
@@ -915,41 +907,21 @@ class CutoutSequence(object):
                     ]
                     # cutout_slice = image
 
-                    # Get observation time
-                    tai = phd.get('TAI', None)
-
                     try:
-                        datetime_observed = tai2date(tai)
+                        datetime_observed = fits_get_observation_time(
+                            header=phd)
 
-                    except Exception:
-                        # Use DATE-OBS instead
-                        date_obs = phd.get('DATE-OBS', None)
-                        time_obs = phd.get('TAIHMS', None)
-                        datetime_obs = date_obs + 'T' + time_obs
-                        try:
-                            datetime_observed = dt.datetime.strptime(
-                                datetime_obs, fmts[0])
-
-                        except Exception:
-                            try:
-                                datetime_observed = dt.datetime.strptime(
-                                    date_obs, fmts[1])
-
-                            except Exception:
-                                try:
-                                    datetime_observed = dt.datetime.strptime(
-                                        date_obs, fmts[2])
-
-                                except Exception:
-                                    err = 'The header does not contain any'
-                                    err += ' readable observation timestamp.'
-                                    raise FITSHeaderError(err)
+                    except FITSHeaderError as err:
+                        print '  FITSHeaderError:', err.message
+                        hdulist.close()
+                        continue
 
                     # Save the cutout date for the timeline
                     self.cutout_dates.append(datetime_observed)
 
                     # Format the date for the output filenames
-                    date_str = dt.datetime.strftime(datetime_observed, fmts[0])
+                    fmt = '%Y-%m-%dT%H:%M:%S'
+                    date_str = dt.datetime.strftime(datetime_observed, fmt)
                     # date_str = dt.datetime.strftime(datetime_observed, '%s')
 
                     # Save the cutout
@@ -1656,6 +1628,53 @@ def get_covering_fields(radec):
 
     return fields.loc[ix]
 
+def fits_get_observation_time(header=None):
+    """
+    Extract observation time from given FITS header
+
+    """
+
+    if header is None:
+        raise FITSHeaderError('Given header is None')
+
+    # Formats used to read and write formatted dates
+    fmts = [
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%d',
+        '%y/%m/%d',
+    #     '%H:%M:%S',
+    ]
+    tai = header.get('TAI', None)
+
+    try:
+        datetime_observed = tai2date(tai)
+
+    except Exception:
+        # Use DATE-OBS instead
+        date_obs = header.get('DATE-OBS', None)
+        time_obs = header.get('TAIHMS', None)
+        datetime_obs = date_obs + 'T' + time_obs
+        try:
+            datetime_observed = dt.datetime.strptime(
+                datetime_obs, fmts[0])
+
+        except Exception:
+            try:
+                datetime_observed = dt.datetime.strptime(
+                    date_obs, fmts[1])
+
+            except Exception:
+                try:
+                    datetime_observed = dt.datetime.strptime(
+                        date_obs, fmts[2])
+
+                except Exception:
+                    err = 'The header does not contain any'
+                    err += ' readable observation timestamp.'
+                    raise FITSHeaderError(err)
+
+    return datetime_observed
+
 # ---
 
 def write_cutout_sequence_summary(cs):
@@ -1831,7 +1850,7 @@ def create_cutout_data():
                 cs.initialise()
 
             except CutoutSequenceError as err:
-                msg('CutoutSequenceError: ' + err.upper())
+                msg('CutoutSequenceError: ' + err.message.upper())
 
                 """
                 cs is now flagged, and the flagging has been saved to the
