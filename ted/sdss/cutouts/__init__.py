@@ -1942,7 +1942,7 @@ def create_cutout_data():
                 line = ['{:d}'.format(i)]
                 line += cs.radec.flatten().astype(str).tolist()
                 line += [str(int(cs.is_sn))]
-                with open(env.files.get('log_cutouts'), 'a') as fsock:
+                with open(env.files.get('log_cut'), 'a') as fsock:
                     fsock.write('{}\n'.format(','.join(line)))
 
                 # Now keep looking for a replacement for this entry
