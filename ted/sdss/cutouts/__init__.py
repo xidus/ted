@@ -1045,26 +1045,57 @@ class CutoutSequence(object):
         # This approach ensures that entries in either array matches the same
         # cutout.
 
-        ts = [str, dt.datetime, int]
-        ds = ['cutouts', 'cutout_dates', 'pxmax']
-        dtype = [(d, t) for (d, t) in zip(ds, ts)]
-        data = np.zeros(len(self.cutouts), dtype=dtype)
-        data_ = np.array([self.cutouts, self.cutout_dates, self.pxmax]).T
-        for i, field in enumerate(ds):
-            data[field] = data_[:, i]
+        if 0:
+            ts = [str, dt.datetime]
+            ds = ['cutouts', 'cutout_dates']
+            dtype = [(d, t) for (d, t) in zip(ds, ts)]
+            data = np.zeros(len(self.cutouts), dtype=dtype)
+            data_ = [self.cutouts, self.cutout_dates]
+            for d in data_:
+                print len(d)
+            # print data.shape, data.dtype
+            # print data
+            # for i, field in enumerate(ds):
+            #     print i, field
+            #     data[field] = data_[i]
+            #     print data[field]
+            data['cutouts'] = self.cutouts
+            data['cutout_dates'] = np.array(self.cutout_dates, dtype=[dtype[1]])
 
-        # Do the sorting
-        data.sort(order='cutout_dates')
+            # Do the sorting
+            data.sort(order='cutout_dates')
 
-        # Re-assign the sorted arrays
-        [setattr(self, name, data[name]) for name in data.dtype.names]
+            # Re-assign the sorted arrays
+            [setattr(self, name, data[name]) for name in data.dtype.names]
+
+        elif 0:
+            data =[]
+            for tuple_ in zip(self.cutout_dates, self.cutouts):
+                data.append(tuple_)
+            data = sorted(data, key=lambda k: k[0])
+
+            cutout_dates = []
+            cutouts = []
+            for (d, c) in data:
+                cutout_dates.append(d)
+                cutouts.append(c)
+
+            self.cutouts = np.array(cutouts)
+            self.cutout_dates = np.array(cutout_dates)
+
+        else:
+            self.cutouts = np.array(sorted(self.cutouts))
+            self.cutout_dates = np.array(sorted(self.cutout_dates))
+
+        # This array is just to make histograms
+        # so the sort order does not matter.
+        self.pxmax = np.array(self.pxmax)
 
         # Summary
         # -------
 
-        # NEED a better limit than having at least one cutout.
-        # This is not good enough.
-        if self.cutouts.size > self.MIN_NUMBER_OF_CUTOUTS:
+        # Are the number of cutouts made above the desired threshold?
+        if self.cutouts.size >= self.MIN_NUMBER_OF_CUTOUTS:
             msg('Succesfully created {:d} cutouts'.format(len(self.cutouts)))
 
             msg('Saving cutout data')
@@ -1073,7 +1104,7 @@ class CutoutSequence(object):
 
             # Save cutout dates and filenames
             with open(ofname_cutouts, 'w+') as fsock:
-                fstr = '{},{}\n'
+                fstr = '{:s},{:s}\n'
                 for (c, d) in zip(self.cutouts, self.cutout_dates):
                     fsock.write(fstr.format(d.isoformat(), c))
 
