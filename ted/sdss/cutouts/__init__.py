@@ -94,6 +94,17 @@ class CutoutSequence(object):
     *
 
     """
+
+    """
+    Since there are more than 17000 available coordinates from the galaxy list
+    to use, I am setting this pretty high to begin with.
+    This threshold is something that should be played with.
+    Setting it too high may eliminate events from the event list, since they
+    will be replaced by galaxy coordinates, thus reducing the ratio of events
+    to the number of non-events.
+    """
+    MIN_NUMBER_OF_CUTOUTS = 50
+
     def __init__(self, radec=None, size=(101, 101), is_sn=False):
 
         # get_crd(ix=self.source_ix, source=self.source_key)
@@ -1053,7 +1064,7 @@ class CutoutSequence(object):
 
         # NEED a better limit than having at least one cutout.
         # This is not good enough.
-        if len(self.cutouts) > 0:
+        if self.cutouts.size > self.MIN_NUMBER_OF_CUTOUTS:
             msg('Succesfully created {:d} cutouts'.format(len(self.cutouts)))
 
             msg('Saving cutout data')
@@ -1089,10 +1100,11 @@ class CutoutSequence(object):
             # plot_pixel_indices(self, opath=self.path('coord'))
 
         else:
-            msg('Not enough cutouts could be made (only {:d})'.format(
-                len(self.cutouts))
-            )
+            msg_fstr = 'Not enough cutouts could be made'
+            msg_fstr += ' (only {:d} of {:d} needed)'
+            msg(msg_fstr.format(self.cutouts.size, self.MIN_NUMBER_OF_CUTOUTS))
 
+            # Take this coordinate off the list.
             self.flag()
 
             """
