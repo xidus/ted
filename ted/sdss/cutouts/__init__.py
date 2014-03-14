@@ -127,12 +127,6 @@ class CutoutSequence(object):
         msg('Creating directories')
         self.create_directories()
 
-        # Is this instance flagged?
-        if self.flagged:
-            # Then stop here
-            err = 'CutoutSequence is flagged!'
-            raise CutoutSequenceError(err)
-
         # Create a dictionary for saved steps
         self._file = {}
 
@@ -221,6 +215,12 @@ class CutoutSequence(object):
         The registered cutouts can now be loaded into a datacube for analysis.
 
         """
+
+        # Is this instance flagged?
+        if self.flagged:
+            # Then stop here
+            err = 'CutoutSequence is flagged!'
+            raise CutoutSequenceError(err)
 
         # Create raw cutout sequence
         # --------------------------
