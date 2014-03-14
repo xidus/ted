@@ -38,7 +38,7 @@ from ..das import frame_path
 
 from .plotting import plot_covering
 from .plotting import plot_possible_cutouts
-from .plotting import plot_pixel_indices
+# from .plotting import plot_pixel_indices
 from .plotting import plot_time_coverage
 from .plotting import plot_background_models
 
@@ -602,13 +602,18 @@ class CutoutSequence(object):
             self.pxmax = list(np.loadtxt(ofname_pxmax))
 
             # Load cutout dates and filenames
-            dtype = [('cutout_dates', dt.datetime), ('cutouts', str)]
+            # dtype = [('cutout_dates', dt.datetime), ('cutouts', str)]
+            dtype = [('cutout_dates', dt.datetime)]
             lkw = dict(converters={0:s2d}, delimiter=',', dtype=dtype)
+            lkw.update(usecols=[0])
             data = np.loadtxt(ofname_cutouts, **lkw)
-            # This method did not work. Maybe it should not be in a list comp.
-            # [setattr(self, name, data[name]) for name in data.dtype.names]
-            self.cutout_dates, self.cutouts = [data[name]
-                                                for name in data.dtype.names]
+            [setattr(self, name, data[name]) for name in data.dtype.names]
+
+            # Get the cutout filenames
+            # I have not solved the problem of why the filenames can not be
+            # loaded, so I am getting them in this way instead.
+            self.cutouts = self.get_filenames(path='fits', match='*.fit.gz')
+
 
             # # Load row and col pixel indices
             # # cutouts only
@@ -1018,9 +1023,36 @@ class CutoutSequence(object):
 
                 hdulist.close()
 
+        # Recast variables
+        # ----------------
+
+        # Gather the output in a structured array so that they can be
+        # sorted together after the observation date.
+
+        # Rationale: When loading the data from disk, the cutout filenames
+        # are sorted by filename which is names after the observation date.
+        # This approach ensures that entries in either array matches the same
+        # cutout.
+
+        ts = [str, dt.datetime, int]
+        ds = ['cutouts', 'cutout_dates', 'pxmax']
+        dtype = [(d, t) for (d, t) in zip(ds, ts)]
+        data = np.zeros(len(self.cutouts), dtype=dtype)
+        data_ = np.array([self.cutouts, self.cutout_dates, self.pxmax]).T
+        for i, field in enumerate(ds):
+            data[field] = data_[:, i]
+
+        # Do the sorting
+        data.sort(order='cutout_dates')
+
+        # Re-assign the sorted arrays
+        [setattr(self, name, data[name]) for name in data.dtype.names]
+
         # Summary
         # -------
 
+        # NEED a better limit than having at least one cutout.
+        # This is not good enough.
         if len(self.cutouts) > 0:
             msg('Succesfully created {:d} cutouts'.format(len(self.cutouts)))
 
