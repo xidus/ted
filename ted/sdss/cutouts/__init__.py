@@ -581,16 +581,17 @@ class CutoutSequence(object):
 
         ofname_cutouts = os.path.join(self.path('coord'), 'cutouts.csv')
         ofname_pxmax = os.path.join(self.path('coord'), 'pxmax.dat')
-        ofname_pxcrd = os.path.join(self.path('coord'), 'pxcrd.csv')
-        ofname_pxcrd_all = os.path.join(self.path('coord'), 'pxcrd_all.csv')
+        # ofname_pxcrd = os.path.join(self.path('coord'), 'pxcrd.csv')
+        # ofname_pxcrd_all = os.path.join(self.path('coord'), 'pxcrd_all.csv')
 
         if (os.path.isfile(ofname_cutouts)
             and
-            os.path.isfile(ofname_pxmax)
-            and
-            os.path.isfile(ofname_pxcrd)
-            and
-            os.path.isfile(ofname_pxcrd_all)):
+            # os.path.isfile(ofname_pxmax)
+            os.path.isfile(ofname_pxmax)):
+            # and
+            # os.path.isfile(ofname_pxcrd)
+            # and
+            # os.path.isfile(ofname_pxcrd_all)):
 
             def s2d(s):
                 for fmt in ['%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S']:
@@ -601,36 +602,39 @@ class CutoutSequence(object):
             self.pxmax = list(np.loadtxt(ofname_pxmax))
 
             # Load cutout dates and filenames
-            dtype = [('datetime', dt.datetime), ('cutouts', str)]
+            dtype = [('cutout_dates', dt.datetime), ('cutouts', str)]
             lkw = dict(converters={0:s2d}, delimiter=',', dtype=dtype)
             data = np.loadtxt(ofname_cutouts, **lkw)
-            self.cutout_dates, self.cutouts = [data[name]
-                                                for name in data.dtype.names]
+            [setattr(self, name, data[name]) for name in data.dtype.names]
+            # self.cutout_dates, self.cutouts = [data[name]
+            #                                     for name in data.dtype.names]
 
-            # Load row and col pixel indices
-            # cutouts only
-            ds = ['row_ixes', 'col_ixes',]
-            ts = [int] * 2
-            dtype = [(d, t) for (d, t) in zip(ds, ts)]
-            lkw = dict(delimiter=',', dtype=dtype)
-            data = np.loadtxt(ofname_pxcrd, **lkw)
-            self.row_ixes_all,
-            self.col_ixes_all = [data[name] for name in data.dtype.names]
+            # # Load row and col pixel indices
+            # # cutouts only
+            # ds = ['row_ixes', 'col_ixes']
+            # ts = [int] * 2
+            # dtype = [(d, t) for (d, t) in zip(ds, ts)]
+            # lkw = dict(delimiter=',', dtype=dtype)
+            # data = np.loadtxt(ofname_pxcrd, **lkw)
+            # [setattr(self, name, data[name]) for name in data.dtype.names]
+            # # self.row_ixes_all,
+            # # self.col_ixes_all = [data[name] for name in data.dtype.names]
 
-            # Load row and col pixel indices
-            # ALL frames
-            ds = [
-                'row_ixes_all', 'col_ixes_all',
-                'row_ixes_all_r', 'col_ixes_all_r',
-            ]
-            ts = [int] * 4
-            dtype = [(d, t) for (d, t) in zip(ds, ts)]
-            lkw = dict(delimiter=',', dtype=dtype)
-            data = np.loadtxt(ofname_pxcrd, **lkw)
-            self.row_ixes_all,
-            self.col_ixes_all,
-            self.row_ixes_all_r,
-            self.col_ixes_all_r = [data[name] for name in data.dtype.names]
+            # # Load row and col pixel indices
+            # # ALL frames
+            # ds = [
+            #     'row_ixes_all', 'col_ixes_all',
+            #     'row_ixes_all_r', 'col_ixes_all_r'
+            # ]
+            # ts = [int] * 4
+            # dtype = [(d, t) for (d, t) in zip(ds, ts)]
+            # lkw = dict(delimiter=',', dtype=dtype)
+            # data = np.loadtxt(ofname_pxcrd, **lkw)
+            # [setattr(self, name, data[name]) for name in data.dtype.names]
+            # # self.row_ixes_all,
+            # # self.col_ixes_all,
+            # # self.row_ixes_all_r,
+            # # self.col_ixes_all_r = [data[name] for name in data.dtype.names]
 
         else:
 
@@ -1029,27 +1033,27 @@ class CutoutSequence(object):
                 for (c, d) in zip(self.cutouts, self.cutout_dates):
                     fsock.write(fstr.format(d.isoformat(), c))
 
-            # Load max cutout px size
+            # Save max cutout px size
             with open(ofname_pxmax, 'w+') as fsock:
                 fsock.write('\n'.join(np.array(self.pxmax).astype(str)))
 
-            # Load row and col pixel indices (cutouts only)
-            data = np.array([self.row_ixes, self.col_ixes]).T
-            np.savetxt(ofname_pxcrd, data, delimiter=',')
+            # # Save row and col pixel indices (cutouts only)
+            # data = np.array([self.row_ixes, self.col_ixes]).T
+            # np.savetxt(ofname_pxcrd, data, delimiter=',')
 
-            # Load row and col pixel indices (ALL frames)
-            data = np.array([
-                self.row_ixes_all, self.col_ixes_all,
-                self.row_ixes_all_r, self.col_ixes_all_r,
-            ]).T
-            np.savetxt(ofname_pxcrd_all, data, delimiter=',')
+            # # Save row and col pixel indices (ALL frames)
+            # data = np.array([
+            #     self.row_ixes_all, self.col_ixes_all,
+            #     self.row_ixes_all_r, self.col_ixes_all_r,
+            # ]).T
+            # np.savetxt(ofname_pxcrd_all, data, delimiter=',')
 
             msg('Creating plots for visual inspection')
 
             # Create plots for visual inspection
             plot_time_coverage(self.cutout_dates, opath=self.path('coord'))
             plot_possible_cutouts(self.pxmax, opath=self.path('coord'))
-            plot_pixel_indices(self, opath=self.path('coord'))
+            # plot_pixel_indices(self, opath=self.path('coord'))
 
         else:
             msg('Not enough cutouts could be made (only {:d})'.format(
