@@ -605,9 +605,10 @@ class CutoutSequence(object):
             dtype = [('cutout_dates', dt.datetime), ('cutouts', str)]
             lkw = dict(converters={0:s2d}, delimiter=',', dtype=dtype)
             data = np.loadtxt(ofname_cutouts, **lkw)
-            [setattr(self, name, data[name]) for name in data.dtype.names]
-            # self.cutout_dates, self.cutouts = [data[name]
-            #                                     for name in data.dtype.names]
+            # This method did not work. Maybe it should not be in a list comp.
+            # [setattr(self, name, data[name]) for name in data.dtype.names]
+            self.cutout_dates,
+            self.cutouts = [data[name] for name in data.dtype.names]
 
             # # Load row and col pixel indices
             # # cutouts only
