@@ -4,6 +4,7 @@
 
 archive/
 ted/env.yaml
+ted/base.env
 
 *.html
 

@@ -97,35 +97,33 @@ def msg(istr, width=78, char='-'):
 class Environment(object):
     """Looks for an environment-configuration file and loads the paths."""
 
-    def __init__(self, ifname=None):
+    _ifname_base = os.path.join(_pkg_home_dir, 'base.env')
+    _ifname_base_default = os.path.join(_pkg_home_dir, 'base.default.env')
+    _ifname_setup = os.path.join(_pkg_home_dir, 'setup.env')
+    _ifname_env = os.path.join(_pkg_home_dir, 'env.yaml')
 
-        self._env_file = os.path.join(_pkg_home_dir, 'env.yaml')
+    def __init__(self):
 
-        if ifname is not None:
-
-            if os.path.isfile(ifname):
-                self._env_file = ifname
-
-            else:
-                raise NoneExistingFileError('File does not exists ...')
-
+        self._check_source_files()
         self.load()
 
     def load(self):
 
         try:
-            with open(self._env_file, 'r') as fsock:
+            with open(self._ifname_env, 'r') as fsock:
                 doc = yaml.load(fsock.read())
 
         except:
-            raise EnvironmentLoadError('Path-configuration file could not load ...')
+            err = 'Path-configuration file could not load ...'
+            raise EnvironmentLoadError(err)
 
         # This is the important part
         for env_type in ('files', 'paths'):
             # Re-initialise
             setattr(self, env_type, {})
-            for env_type_key, env_type_list in doc.get(env_type).iteritems():
-                getattr(self, env_type)[env_type_key] = os.path.join(*env_type_list)
+            for env_type_key, env_type_list in doc.get(env_type).items():
+                getattr(self, env_type)[env_type_key] = os.path.join(
+                    *env_type_list)
 
         # Add the sql-script directory
         getattr(self, 'paths')['sql'] = os.path.join(_pkg_home_dir, 'sql')
@@ -135,6 +133,29 @@ class Environment(object):
 
         # Add the proxies that requests will use
         self.proxies = doc.get('proxies')
+
+    def _check_source_files(self):
+
+        if not os.path.isfile(self._ifname_env):
+            self.update_base()
+
+    def update_base(self):
+
+        if not os.path.isfile(self._ifname_base):
+            ifname_base = self._ifname_base_default
+
+        else:
+            ifname_base = self._ifname_base
+
+        with open(ifname_base, 'r') as fsock:
+            base = fsock.read()
+
+        with open(self._ifname_setup, 'r') as fsock:
+            setup = fsock.read()
+
+        with open(self._ifname_env, 'w+') as fsock:
+            fsock.write(base)
+            fsock.write(setup)
 
 # Initialise
 env = Environment()
