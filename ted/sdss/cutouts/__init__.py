@@ -1146,7 +1146,7 @@ class CutoutSequence(object):
             No need to flag the ones that are inluded in tlist to begin with.
 
             """
-            raise CutoutSequenceError('No cutouts')
+            raise CutoutSequenceError('Not enough cutouts')
 
     ### Image processing and analysis on cutouts for the given coordinate
 
