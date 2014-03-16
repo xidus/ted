@@ -1952,7 +1952,7 @@ def create_cutout_data():
                 tlist = load_tlist()
                 gxlist = load_gxlist()
                 N_gx = gxlist.shape[0]
-                params = dict(size=(101, 101))
+                params = dict(size=(101, 101), is_sn=False)
                 either_flagged_or_in_use = True
                 while either_flagged_or_in_use:
                     RA, Dec = gxlist.iloc[np.random.randint(0, N_gx)]
@@ -1963,7 +1963,7 @@ def create_cutout_data():
                         continue
 
                     # Otherwise create instance
-                    params.update(radec=np.array([RA, Dec]), is_sn=False)
+                    params.update(radec=np.array([RA, Dec]))
                     cs = CutoutSequence(**params)
 
                     # Was the instance previously flagged?
