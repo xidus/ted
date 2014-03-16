@@ -1968,7 +1968,7 @@ def create_cutout_data():
 
                     # Was the instance previously flagged?
                     # If not, use it
-                    if cs.flagged:
+                    if not cs.flagged:
                         either_flagged_or_in_use = False
 
             else:
