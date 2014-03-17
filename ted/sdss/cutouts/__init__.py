@@ -1962,16 +1962,19 @@ def create_cutout_data():
     # Load the data
     css, targets = get_cutout_sequences()
 
+    # There will be flagged cutouts sequences, so load these data sets
+    # separately instead of every time a flag is encountered.
+    tlist = load_tlist()
+    gxlist = load_gxlist()
+
     # Run through each sequence
     for i, cs in enumerate(css):
-
-        # print '{: >3d}'.format(i)
 
         msg('', char=' ')
         msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
 
-        no_cutouts_made = True
-        while no_cutouts_made:
+        too_few_cutouts = True
+        while too_few_cutouts:
 
             try:
                 cs.initialise()
@@ -1989,6 +1992,7 @@ def create_cutout_data():
                 line = ['{:d}'.format(i)]
                 line += cs.radec.flatten().astype(str).tolist()
                 line += [str(int(cs.is_sn))]
+                line += [dt.datetime.now().isoformat()]
                 with open(env.files.get('log_cut'), 'a') as fsock:
                     fsock.write('{}\n'.format(','.join(line)))
 
@@ -1996,30 +2000,28 @@ def create_cutout_data():
                 # until a sequence can be made with the given coordinate.
 
                 # Load both datasets so can check coordinate usage.
-                tlist = load_tlist()
-                gxlist = load_gxlist()
                 N_gx = gxlist.shape[0]
                 params = dict(size=(101, 101), is_sn=False)
-                either_flagged_or_in_use = True
-                while either_flagged_or_in_use:
+                flagged = in_use = True
+                while flagged and in_use:
                     RA, Dec = gxlist.iloc[np.random.randint(0, N_gx)]
 
                     # Check that NOT in tlist
                     tix = (tlist.Ra.values == RA) & (tlist.Dec.values == Dec)
-                    if tix.sum() > 1:
+                    if tix.sum() > 0:
                         continue
+                    else:
+                        in_use = False
 
                     # Otherwise create instance
                     params.update(radec=np.array([RA, Dec]))
                     cs = CutoutSequence(**params)
 
                     # Was the instance previously flagged?
-                    # If not, use it
-                    if not cs.flagged:
-                        either_flagged_or_in_use = False
+                    flagged = cs.flagged
 
             else:
-                no_cutouts_made = False
+                too_few_cutouts = False
 
         # Outside of outer while loop, but inside for loop.
         # change the entry css
