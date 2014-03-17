@@ -133,16 +133,11 @@ class CutoutSequence(object):
         # Create empty dictionary for the background models (templates)
         self.bg_models = {}
 
-        # Define and build directory structure for this coordinate
-        # Creates self.cpaths
-        msg('Creating directories')
-        self.create_directories()
+        # Define directory paths for this instance
+        self.define_directory_paths()
 
         # Create a dictionary for saved steps
         self._file = {}
-
-        # Save first entry to log files
-        self.log_init()
 
     # Helpers
     # -------
@@ -226,6 +221,14 @@ class CutoutSequence(object):
         The registered cutouts can now be loaded into a datacube for analysis.
 
         """
+
+        # Create directory structure for this coordinate
+        msg('Creating directories')
+        self.create_directories()
+
+        # Save first entry to log files
+        msg('Initialising log file')
+        self.log_init()
 
         # Is this instance flagged?
         if self.flagged:
@@ -368,9 +371,9 @@ class CutoutSequence(object):
     # Service methods for self.initialise()
     # -------------------------------------
 
-    def create_directories(self):
+    def define_directory_paths(self):
         """
-        Generate a path structure that should be unique for each coordinate
+        Define a path structure that should be unique for each coordinate
 
         Side effects
         ------------
@@ -406,6 +409,7 @@ class CutoutSequence(object):
         # Save paths
         self.cpaths = cpaths
 
+    def create_directories(self):
         """Create all paths in self.cpaths"""
         for path in self.cpaths.values():
             if not os.path.exists(path):
@@ -1785,12 +1789,16 @@ def write_cutout_sequence_summary(cs):
 # Control programs
 # ----------------
 
-def load_tlist():
-    return pd.read_csv(env.files.get('tlist'))
+def load_snlist():
+    return pd.read_csv(env.files.get('snlist'), sep=';')
 
 
 def load_gxlist():
     return pd.read_csv(env.files.get('gxlist'))
+
+
+def load_tlist():
+    return pd.read_csv(env.files.get('tlist'))
 
 
 def update_tlist(css, targets):
@@ -1861,6 +1869,45 @@ def log_tlist_stats(cs=None):
 
         with open(env.files.get('log_tlist'), 'a') as fsock:
             fsock.write('{}\n'.format(','.join(line)))
+
+
+def load_all_cutout_sequences():
+    """
+    Returns
+    -------
+    cutout_sequences : np.array, 1D
+        List of CutoutSequence objects.
+    targets : np.array, 1D
+        List of targets (feature labels) for each cutout.
+        For now, just 1 feature : bool is_sn
+
+    """
+
+    snlist = load_snlist()
+    gxlist = load_gxlist()
+
+    params = dict(size=(101, 101))
+
+    cutout_sequences = []
+    targets = []
+
+    # First take the supernovae
+    params.update(is_sn=True)
+    for i in range(snlist.shape[0]):
+        params.update(radec=np.array([snlist.Ra[i], snlist.Dec[i]]))
+        cutout_sequences.append(CutoutSequence(**params))
+
+    # Then the galaxy coordinates
+    params.update(is_sn=False)
+    for i in range(gxlist.shape[0]):
+        params.update(radec=np.array([gxlist.Ra[i], gxlist.Dec[i]]))
+        cutout_sequences.append(CutoutSequence(**params))
+
+    # Add all the targets
+    targets.extend([True] * snlist.shape[0])
+    targets.extend([False] * gxlist.shape[0])
+
+    return np.array(cutout_sequences), np.array(targets)
 
 
 def get_cutout_sequences():
@@ -2177,12 +2224,6 @@ def main():
     Yes.
 
     """
-
-    # from mplconf import mplrc
-    # from mplconf import rmath
-
-    # mplrc('publish_digital')
-
 
     # plot_covering(co.radec, co.fields_covering, co.path('root'))
     # plot_possible_cutouts(pxmax=co.pxmax, opath=co.path('root'))
