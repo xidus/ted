@@ -2006,7 +2006,7 @@ def create_cutout_data():
                 while flagged and in_use:
                     RA, Dec = gxlist.iloc[np.random.randint(0, N_gx)]
 
-                    # Check that NOT in tlist
+                    # Check that the newly drawn coord is NOT in tlist already.
                     tix = (tlist.Ra.values == RA) & (tlist.Dec.values == Dec)
                     if tix.sum() > 0:
                         continue
