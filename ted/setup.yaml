@@ -53,6 +53,8 @@ files:
   # Logging
   log_das: [*data, das.log]
   log_cut: [*data, cutouts.log]
+  # For the outer loop in function cutouts.create_cutout_data()
+  log_create_cutout_data: [*data, create_cutout_data.log]
   log_tlist: [*data, tlist.log]
   log_snlist: [*data, snlists, snlist_merge_report.txt]
 
