@@ -1978,6 +1978,7 @@ def create_cutout_data():
     # Create a new log file
     log_tlist_initialise()
     log = Log(env.files.get('log_create_cutout_data'))
+    log.log_empty()
     log_while = ' while too_few_cutouts:'
     log_except = ' except:'
     log_while2 = ' while flagged and in_use:'
