@@ -704,7 +704,7 @@ def check_tlist():
         plt.savefig(ofname_fig)
 
 ###############################################################################
-def get_fields(ignore_saved=True):
+def get_fields(skip_if_exists=True):
     """For each coordinate in the SNe file, get the frames
     from the Field table that cover that coordinate.
 
@@ -777,7 +777,7 @@ ORDER BY
         ofname = os.path.join(opath, '{}.csv'.format(SDSS_id))
 
         # Don't bother requesting anything if the file already exists
-        if os.path.isfile(ofname) and ignore_saved:
+        if os.path.isfile(ofname) and skip_if_exists:
             return
 
         # Update progress output
