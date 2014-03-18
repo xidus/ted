@@ -27,17 +27,19 @@ def remove_unwanted_data():
     css, targets = load_all_cutout_sequences()
     dirs_ok = [os.path.split(cs.path('coord'))[1] for cs in css]
 
+    # /path/to/data/cutouts/101x101
     base = css[0].path('root')
     print 'base:', base
 
+    # Put the log file inthe parent directory
+    # /path/to/data/cutouts
     opath = os.path.split(base)[0]
     ofname = os.path.join(opath, 'remove.log')
 
     with open(ofname, 'a') as fsock:
         fsock.write('\nNext remove log\n')
 
-    # paths have structure: /path/to/data/cutouts/101x101/coord
-    # Get the parent directory
+    # Get pattern for all the files in the directory `base`
     iglob = os.path.join(base, '*')
     print 'iglob', iglob
 
@@ -54,4 +56,41 @@ def remove_unwanted_data():
             with open(ofname, 'a') as fsock:
                 fsock.write('{}\n'.format(path))
 
+
+def remove_flags():
+
+    import glob
+
+    # Load all cutout sequences
+    css, targets = load_all_cutout_sequences()
+
+    # /path/to/data/cutouts/101x101
+    base = css[0].path('root')
+    print 'base:', base
+
+    opath = os.path.split(base)[0]
+    ofname = os.path.join(opath, 'remove_flagged.log')
+
+    with open(ofname, 'a') as fsock:
+        fsock.write('\nNext remove flagged log\n')
+
+    # Get pattern for all the files in the directory `base`
+    iglob = os.path.join(base, '*')
+    print 'iglob', iglob
+
+    # Create paths to flagged filenames
+    fnames = [
+        os.path.join(path, 'flagged')
+        for path in glob.glob(iglob)
+        if os.path.isdir(path)
+    ]
+    # os.remove raises an exception if files to be removed do not exist.
+    fnames = [fname for fname in fnames if os.path.isfile(fname)]
+
+    for fname in fnames:
+        cmd = 'rm {}'.format(path)
+        print cmd
+        os.system(cmd)
+        with open(ofname, 'a') as fsock:
+            fsock.write('{}\n'.format(fname))
 
