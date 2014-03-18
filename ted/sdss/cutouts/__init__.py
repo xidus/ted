@@ -445,13 +445,13 @@ class CutoutSequence(object):
         if os.path.isfile(fname):
             self.fields = pd.read_csv(self.file('fields'))
 
+            # Plot coverage overview for given cutout
+            # Un-commenting reason: see last lines of self.create_raw_cutouts()
+            plot_covering(self.radec, self.fields, self.path('coord'))
+
         else:
             self.fields = get_covering_fields(self.radec)
             self.fields.to_csv(fname, index=False, headers=True)
-
-        # Plot coverage overview for given cutout
-        # Un-commenting reason: see last lines of self.create_raw_cutouts()
-        plot_covering(self.radec, self.fields, self.path('coord'))
 
         # Display output to screen
         msg('Found {:d} fields that cover coordinate {}'.format(
@@ -1038,6 +1038,16 @@ class CutoutSequence(object):
 
                 hdulist.close()
 
+            # --- END for loop
+            msg('Creating plots for visual inspection')
+
+            # Create plots for visual inspection
+            plot_time_coverage(self.cutout_dates, opath=self.path('coord'))
+            plot_possible_cutouts(self.pxmax, opath=self.path('coord'))
+            # plot_pixel_indices(self, opath=self.path('coord'))
+
+        # --- END if cutouts already made
+
         # Recast variables
         # ----------------
 
@@ -1126,13 +1136,6 @@ class CutoutSequence(object):
             #     self.row_ixes_all_r, self.col_ixes_all_r,
             # ]).T
             # np.savetxt(ofname_pxcrd_all, data, delimiter=',')
-
-            msg('Creating plots for visual inspection')
-
-            # Create plots for visual inspection
-            plot_time_coverage(self.cutout_dates, opath=self.path('coord'))
-            plot_possible_cutouts(self.pxmax, opath=self.path('coord'))
-            # plot_pixel_indices(self, opath=self.path('coord'))
 
         else:
             msg_fstr = 'Not enough cutouts could be made'
@@ -2055,6 +2058,7 @@ def create_cutout_data():
 
                     # Otherwise create instance
                     params.update(radec=np.array([RA, Dec]))
+                    # Updating the variable cs
                     cs = CutoutSequence(**params)
 
                     # Was the instance previously flagged?
