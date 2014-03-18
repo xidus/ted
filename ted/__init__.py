@@ -97,9 +97,9 @@ def msg(istr, width=78, char='-'):
 class Environment(object):
     """Looks for an environment-configuration file and loads the paths."""
 
-    _ifname_base = os.path.join(_pkg_home_dir, 'base.env')
-    _ifname_base_default = os.path.join(_pkg_home_dir, 'base.default.env')
-    _ifname_setup = os.path.join(_pkg_home_dir, 'setup.env')
+    _ifname_base = os.path.join(_pkg_home_dir, 'base.yaml')
+    _ifname_base_default = os.path.join(_pkg_home_dir, 'base.default.yaml')
+    _ifname_setup = os.path.join(_pkg_home_dir, 'setup.yaml')
     _ifname_env = os.path.join(_pkg_home_dir, 'env.yaml')
 
     def __init__(self):
