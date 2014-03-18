@@ -1950,6 +1950,25 @@ def get_cutout_sequences():
     return np.array(cutout_sequences), np.array(targets)
 
 
+class Log(object):
+
+    def __init__(self, fname, sep=','):
+        self.fname = fname
+        self.sep = sep
+
+    def _log(self, s):
+        with open(self.fname, 'a') as fsock:
+            fsock.write('{}\n'.format(s))
+
+    def log(self, s):
+        now = dt.datetime.now().isoformat()
+        self._log('{now}{sep}{s}'.format(
+                now=now, sep=self.sep, s=s))
+
+    def log_empty(self):
+        self._log('')
+
+
 def create_cutout_data():
     """
     Initialise directories and create data for analysis.
@@ -1958,6 +1977,11 @@ def create_cutout_data():
 
     # Create a new log file
     log_tlist_initialise()
+    log = Log(env.files.get('log_create_cutout_data'))
+    log_while = ' while too_few_cutouts:'
+    log_except = ' except:'
+    log_while2 = ' while flagged and in_use:'
+    log_passed = ' passed !'
 
     # Load the data
     css, targets = get_cutout_sequences()
@@ -1966,6 +1990,9 @@ def create_cutout_data():
     # separately instead of every time a flag is encountered.
     tlist = load_tlist()
     gxlist = load_gxlist()
+    # Replacement coordinates will only be drawn from gxlist
+    # where all coordinates are non-events per definition
+    params = dict(size=(101, 101), is_sn=False)
 
     # Run through each sequence
     for i, cs in enumerate(css):
@@ -1973,14 +2000,21 @@ def create_cutout_data():
         msg('', char=' ')
         msg('CutoutSequence[{:d}].init() - crd_str: {}'.format(i, cs.crd_str))
 
+        log_base = 'css[{: >4d}]: for:'.format(i)
+        log.log(log_base)
+
         too_few_cutouts = True
         while too_few_cutouts:
+
+            log.log(log_base + log_while)
 
             try:
                 cs.initialise()
 
             except CutoutSequenceError as err:
                 msg('CutoutSequenceError: ' + err.message.upper())
+
+                log.log(log_base + log_while + log_except)
 
                 """
                 cs is now flagged, and the flagging has been saved to the
@@ -2001,14 +2035,19 @@ def create_cutout_data():
 
                 # Load both datasets so can check coordinate usage.
                 N_gx = gxlist.shape[0]
-                params = dict(size=(101, 101), is_sn=False)
                 flagged = in_use = True
                 while flagged and in_use:
+
+                    log_str = log_base + log_while + log_except + log_while2
+                    log.log(log_str)
+
                     RA, Dec = gxlist.iloc[np.random.randint(0, N_gx)]
 
                     # Check that the newly drawn coord is NOT in tlist already.
                     tix = (tlist.Ra.values == RA) & (tlist.Dec.values == Dec)
                     if tix.sum() > 0:
+                        log_str += ' in_use ...'
+                        log.log(log_str)
                         continue
                     else:
                         in_use = False
@@ -2019,8 +2058,12 @@ def create_cutout_data():
 
                     # Was the instance previously flagged?
                     flagged = cs.flagged
+                    log_str += ' flagged ...' if flagged else ' NOT flagged'
+                    log.log(log_str)
 
             else:
+
+                log.log(log_base + log_while + log_passed)
                 too_few_cutouts = False
 
         # Outside of outer while loop, but inside for loop.
