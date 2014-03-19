@@ -942,13 +942,28 @@ class CutoutSequence(object):
                         hdulist.close()
                         continue
 
+                    # For one frame, `datetime_observed` had the year 1858,
+                    # and so it seems that this frame had an offset of zero
+                    # seconds.
+                    #   It is not clear what causes this.
+                    #   It the frame a coadded image?`(Do coadded frames have
+                    #  zero offset?)
+                    #   Is is because the observation time is simply missing?
+                    #   What other reasons could there be?
+                    try:
+                        # Format the date for the output filenames
+                        fmt = '%Y-%m-%dT%H:%M:%S'
+                        date_str = dt.datetime.strftime(datetime_observed, fmt)
+                        # date_str = dt.datetime.strftime(datetime_observed, '%s')
+
+                    except ValueError as err:
+                        print '  ValueError:', err.message,
+                        print '; Date:', datetime_observed
+                        hdulist.close()
+                        continue
+
                     # Save the cutout date for the timeline
                     self.cutout_dates.append(datetime_observed)
-
-                    # Format the date for the output filenames
-                    fmt = '%Y-%m-%dT%H:%M:%S'
-                    date_str = dt.datetime.strftime(datetime_observed, fmt)
-                    # date_str = dt.datetime.strftime(datetime_observed, '%s')
 
                     # Save the cutout
 
