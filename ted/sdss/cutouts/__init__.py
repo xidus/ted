@@ -1211,30 +1211,38 @@ done\
         except IndexError:
             # wcsremap() was run before gunzip()
             # or gunzip() did not produce anything.
+            print 'IndexError'
+            print 'Can not proceed without reference to cutout frames'
+            print 'Flagging sequence ...'
+            self.flag(reason='wcsremap: no files found')
 
-            print 'WCSREMAP: IndexError'
+            if 0:
+                # Make gunzip() runable again
+                # a status other than 'finished' will force it to run again.
+                print 'WCSREMAP: Forcing self.gunzip() to run again'
+                self.log(step='gunzip', status='redo')
 
-            # Make gunzip() runable again
-            # a status other than 'finished' will force it to run again.
-            print 'WCSREMAP: Forcing self.gunzip() to run again'
-            self.log(step='gunzip', status='redo')
+                msg('GUNZIP (called from CutoutSequence.wcsremap())')
+                self.gunzip()
 
-            msg('GUNZIP (called from CutoutSequence.wcsremap())')
-            self.gunzip()
+                try:
+                    files = self.get_filenames(path='gunzip', match='*.fit')
+                    template_frame = files[0]
 
-            try:
-                files = self.get_filenames(path='gunzip', match='*.fit')
-                template_frame = files[0]
-
-            except:
-                print 'WCSREMAP: No files were found ...'
-                print 'WCSREMAP: Can not proceed. Flagging sequence ...'
-                self.flag(reason='wcsremap: no files found')
+                except:
+                    print 'WCSREMAP: No files were found ...'
+                    print 'WCSREMAP: Can not proceed. Flagging sequence ...'
+                    self.flag(reason='wcsremap: no files found')
 
         except:
-            print 'WCSREMAP: Failed for unknown reason ...'
-            print 'WCSREMAP: Can not proceed. Flagging sequence ...'
+            print 'Failed for unknown reason ...'
+            print 'Can not proceed without reference to cutout frames'
+            print 'Flagging sequence ...'
             self.flag(reason='wcsremap: unknown reason')
+
+        # Did instance get flagged above?
+        if self.flagged:
+            raise CutoutSequenceError('Flagged by CutoutSequence.wcsremap()')
 
         # Not specifying complete path, since environment should be set
         # on my own machine as well as on the image server.
