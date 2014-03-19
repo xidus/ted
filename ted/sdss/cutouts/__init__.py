@@ -498,7 +498,7 @@ class CutoutSequence(object):
         # Load a file or calculate again?
         if os.path.isfile(self.file('frames')):
             # self.frames = pd.read_csv(self.file('frames'))
-            self.frames = np.loadtxt(self.file('frames'), dtype=str).tolist()
+            self.frames = np.loadtxt(self.file('frames'), dtype=str)# .tolist()
 
         else:
 
@@ -559,7 +559,8 @@ class CutoutSequence(object):
 
         fstr = 'Of {:d} covering fields, {:d} are valid'
         fstr += ' AND non-coadded FITS files'
-        msg(fstr.format(self.fields.shape[0], len(self.frames)))
+        # msg(fstr.format(self.fields.shape[0], len(self.frames)))
+        msg(fstr.format(self.fields.shape[0], self.frames.size))
 
     # @logged
     def create_raw_cutouts(self):
@@ -1143,7 +1144,7 @@ class CutoutSequence(object):
             msg(msg_fstr.format(self.cutouts.size, self.MIN_NUMBER_OF_CUTOUTS))
 
             # Take this coordinate off the list.
-            self.flag()
+            self.flag(reason='Not enough cutouts')
 
             """
             Must stop here and return a value to the program that created
@@ -1163,7 +1164,8 @@ class CutoutSequence(object):
         # Gunzip
 
         # Original command
-        # From: https://superuser.com/questions/139419/how-do-i-gunzip-to-a-different-destination-directory
+        # From: https://superuser.com/questions/139419/how-do-i-gunzip-
+        # to-a-different-destination-directory
         #
         #  for f in *.gz; do
         #  STEM=$(basename $f .gz)
@@ -1171,9 +1173,11 @@ class CutoutSequence(object):
         #  done
         #
         # Alternative
-        # <http://docs.python.org/2/library/gzip.html> (use Python for all the things!)
+        # <http://docs.python.org/2/library/gzip.html>
+        # (use Python for all the things!)
         #
 
+        # abs_glob = os.path.join(self.path('fits'), '*.gz')
         cmd_kw = dict(fits=self.path('fits'), gunzip=self.path('gunzip'))
         cmd_gunzip = '''\
 cd {fits}
@@ -1189,14 +1193,93 @@ done\
     @logged
     def wcsremap(self):
 
+        # Dummy code for an idea
+        # self.requires(methods=['gunzip'])
+        # OR
+        # @logged(requires=['gunzip'])
+        # ---
+
+        # WCSREMAP
+        # import glob
+
+        # iglob = os.path.join(self.path('gunzip'), '*.fit')
+        # files = sorted(glob.glob(iglob))
+
+        files = self.get_filenames(path='gunzip', match='*.fit')
+
+        try:
+            # Set the template frame to be the first in the time series.
+            template_frame = files[0]
+
+        except IndexError:
+            # wcsremap() was run before gunzip()
+            # or gunzip() did not produce anything.
+
+            print 'WCSREMAP: IndexError'
+
+            # Make gunzip() runable again
+            # a status other than 'finished' will force it to run again.
+            print 'WCSREMAP: Forcing self.gunzip() to run again'
+            self.log(step='gunzip', status='redo')
+
+            msg('GUNZIP (called from CutoutSequence.wcsremap())')
+            self.gunzip()
+
+            try:
+                files = sorted(glob.glob(iglob))
+                template_frame = files[0]
+
+            except:
+                print 'WCSREMAP: No files were found ...'
+                print 'WCSREMAP: Can not proceed. Flagging sequence ...'
+                self.flag(reason='wcsremap: no files found')
+
+        except:
+            print 'WCSREMAP: Failed for unknown reason ...'
+            print 'WCSREMAP: Can not proceed. Flagging sequence ...'
+            self.flag(reason='wcsremap: unknown reason')
+
+        # Not specifying complete path, since environment should be set
+        # on my own machine as well as on the image server.
+        cmd_kw = dict(template=template_frame)
+        cmd_wcsremap_fstr = '''\
+wcsremap \
+-template {template} \
+-source {ifname} \
+-outIm {ofname}\
+'''
+
+        # Do I need noise-output images?
+        # This is a measure of the pixel-to-pixel
+        # covariance for the resampled frames.
+
+        print 'Processing files:'
+        for i, ifname in enumerate(files):
+            print '{: >3d}, '.format(i),
+            if i and not (i + 1) % 10:
+                print ''
+            fname = os.path.basename(ifname)
+            ofname = os.path.join(self.path('wcsremap'), fname)
+            # print ifname
+            # print ofname
+            cmd_kw.update(ifname=ifname, ofname=ofname)
+            cmd_wcsremap = cmd_wcsremap_fstr.format(**cmd_kw)
+
+            # print(cmd_wcsremap)
+            os.system(cmd_wcsremap)
+
+        print '\n'
+
+    def DEV_wcsremap(self):
+
         # WCSREMAP
         import glob
 
+        # iglob = os.path.join(self.path('gunzip'), '*.fit')
         iglob = os.path.join(self.path('gunzip'), '*.fit')
         files = sorted(glob.glob(iglob))
 
-        """FIXME"""
-        # Need to be valid file that could have a cutout made out of it.
+        # Set the template frame to be the first in the time series.
         template_frame = files[0]
 
         # Not specifying complete path, since environment should be set
@@ -1228,7 +1311,7 @@ wcsremap \
             # print(cmd_wcsremap)
             os.system(cmd_wcsremap)
 
-        print ''
+        print '\n'
 
     # Service methods for loading and initialising the data for the analysis
     # ----------------------------------------------------------------------
