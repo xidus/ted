@@ -41,6 +41,14 @@ from mplconf import rmath
 mplrc('publish_digital')
 
 
+def auto(fun):
+    """A decorator for logging"""
+    def wrapped(*args, **kwargs):
+        fun(self, *args, **kwargs)
+        self.log(step=fun.func_name, status='finished')
+    return wrapped
+
+
 def get_extent(cs):
     """
     extent : None | (left, right, bottom, top)
@@ -117,6 +125,8 @@ def plot_covering(radec, fields, opath):
     plt.savefig(os.path.join(opath, 'coverage.pdf'))
     # plt.savefig(os.path.join(opath, 'coverage.png'), dpi=72)
 
+    plt.close(fig)
+
 
 def plot_possible_cutouts(pxmax, opath):
     """
@@ -155,6 +165,8 @@ def plot_possible_cutouts(pxmax, opath):
     plt.savefig(os.path.join(opath, 'max_cutout_size.pdf'))
     # plt.savefig(os.path.join(opath, 'max_cutout_size.png'), dpi=72)
 
+    plt.close(fig)
+
 
 def plot_pixel_indices(cs, opath):
 
@@ -178,6 +190,8 @@ def plot_pixel_indices(cs, opath):
     plt.savefig(os.path.join(opath, 'pixel_indices_joint.pdf'))
     # plt.savefig(
     #     os.path.join(cs.path('coord'), 'pixel_indices_joint.png'), dpi=72)
+
+    plt.close(fig)
 
 
 def plot_time_coverage(cutout_dates, opath):
@@ -243,6 +257,8 @@ def plot_time_coverage(cutout_dates, opath):
     plt.savefig(os.path.join(opath, 'stats.pdf'))
     # plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
 
+    plt.close(fig)
+
 
 def plot_background_models(cs):
 
@@ -283,6 +299,8 @@ def plot_background_models(cs):
 
     fig.tight_layout()
     plt.savefig(os.path.join(cs.path('coord'), 'background_templates.pdf'))
+
+    plt.close(fig)
 
 
 def plot_residual_samples(cs, offset=0):
@@ -330,6 +348,8 @@ def plot_residual_samples(cs, offset=0):
     ofname_check_residual = os.path.join(
         cs.path('results'), 'check_residual.pdf')
     plt.savefig(ofname_check_residual)
+
+    plt.close(fig)
 
 
 def plot_LoG_samples(cs, offset=0):
@@ -415,6 +435,8 @@ def plot_LoG_samples(cs, offset=0):
     ofname_check_LoG = os.path.join(cs.path('results'), 'check_LoG.pdf')
     plt.savefig(ofname_check_LoG)
 
+    plt.close(fig)
+
 
 def plot_binary_fields(cs):
     """
@@ -455,6 +477,8 @@ def plot_binary_fields(cs):
     ofname_check_minima = os.path.join(cs.path('results'), 'check_minima.pdf')
     plt.savefig(ofname_check_minima)
 
+    plt.close(fig)
+
 
 def plot_histogram_intensity(cs):
     """
@@ -490,6 +514,8 @@ def plot_histogram_intensity(cs):
         cs.path('results'), 'check_intensities_remap.pdf')
     plt.savefig(ofname_check_intensities)
 
+    plt.close(fig)
+
 
 def plot_histogram_LoG(cs):
     """
@@ -514,6 +540,8 @@ def plot_histogram_LoG(cs):
     ofname_check_intensities = os.path.join(
         cs.path('results'), 'check_intensities_LoG.pdf')
     plt.savefig(ofname_check_intensities)
+
+    plt.close(fig)
 
 
 def plot_histogram_ranked_LoG(cs):
@@ -550,4 +578,6 @@ def plot_histogram_ranked_LoG(cs):
 
         ofname_check_intensities = os.path.join(opath, 'check_intensities_LoG.pdf')
         plt.savefig(ofname_check_intensities)
+
+        plt.close(fig)
 
