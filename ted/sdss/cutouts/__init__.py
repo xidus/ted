@@ -1197,14 +1197,11 @@ done\
         # self.requires(methods=['gunzip'])
         # OR
         # @logged(requires=['gunzip'])
+        # OR
+        # dependencies(order=['gunzip'])
         # ---
 
-        # WCSREMAP
-        # import glob
-
-        # iglob = os.path.join(self.path('gunzip'), '*.fit')
-        # files = sorted(glob.glob(iglob))
-
+        # Get sorted list of filenames in the gunzip directory
         files = self.get_filenames(path='gunzip', match='*.fit')
 
         try:
@@ -1226,7 +1223,7 @@ done\
             self.gunzip()
 
             try:
-                files = sorted(glob.glob(iglob))
+                files = self.get_filenames(path='gunzip', match='*.fit')
                 template_frame = files[0]
 
             except:
