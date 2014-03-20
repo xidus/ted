@@ -196,37 +196,38 @@ def plot_pixel_indices(cs, opath):
 
 def plot_time_coverage(cutout_dates, opath):
 
-    # Get matplotlib dates for the timeline
-    cutout_mdates = mpl.dates.date2num(sorted(cutout_dates))
-    cutout_mdates_diff = cutout_mdates[1:] - cutout_mdates[:-1]
-    # cmdiff_mean = cutout_mdates_diff.mean()
+    # 2014-03-20:
+    # This should not break the cutout-data creation loop.
+    # If the data does dot support the operations below, skip this output.
+    try:
+        # Get matplotlib dates for the timeline
+        cutout_mdates = mpl.dates.date2num(sorted(cutout_dates))
+        cutout_mdates_diff = cutout_mdates[1:] - cutout_mdates[:-1]
+        # cmdiff_mean = cutout_mdates_diff.mean()
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15., 4))
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15., 4))
 
-    ax1.axhline(y=1., c=mpl.rcParams['axes.color_cycle'][0])
-    for mdate in cutout_mdates:
-        ax1.axvline(x=mdate, ymin=.45, ymax=.55, lw=1., c=mpl.rcParams['axes.color_cycle'][1])
-    ax1.set_xlim(cutout_mdates.min(), cutout_mdates.max())
-    ax1.set_ylim(.0, 2.)
-    ax1.xaxis.set_major_formatter(mpl.dates.DateFormatter('%Y'))
-    ax1.xaxis.set_major_locator(mpl.dates.YearLocator())
-    ax1.set_yticklabels([])
-    ax1.set_xlabel(rmath('Time'))
+        ax1.axhline(y=1., c=mpl.rcParams['axes.color_cycle'][0])
+        vkw = dict(ymin=.45, ymax=.55, lw=1.)
+        vkw.update(c=mpl.rcParams['axes.color_cycle'][1])
+        for mdate in cutout_mdates:
+            ax1.axvline(x=mdate, **vkw)
+        ax1.set_xlim(cutout_mdates.min(), cutout_mdates.max())
+        ax1.set_ylim(.0, 2.)
+        ax1.xaxis.set_major_formatter(mpl.dates.DateFormatter('%Y'))
+        ax1.xaxis.set_major_locator(mpl.dates.YearLocator())
+        ax1.set_yticklabels([])
+        ax1.set_xlabel(rmath('Time'))
 
-    # ax2.hist(np.log10(cutout_mdates_diff))
-    # plt.draw() # Maybe this caused the DISPLAY error? (Drawing before saving specifically with pdf/png backend)
-    # xticklabels = [10 ** float(t.get_text().replace(u'\u2212', u'-')) for t in ax2.get_xticklabels()]
-    # ax2.set_xticklabels(xticklabels)
+        # bins = [.0001, .001, .01, .1, 1, 10, 100, 1000, 10000]
+        bins = np.logspace(-4, 4, 9)
+        ax2.hist(cutout_mdates_diff, bins=bins)
+        ax2.set_xscale('log')
+        ax2.grid(b=False, which='minor')
+        ax2.set_xlabel(rmath('Number of days between observations'))
+        # print xticklabels
 
-    # bins = [.0001, .001, .01, .1, 1, 10, 100, 1000, 10000]
-    bins = np.logspace(-4, 4, 9)
-    ax2.hist(cutout_mdates_diff, bins=bins)
-    ax2.set_xscale('log')
-    ax2.grid(b=False, which='minor')
-    ax2.set_xlabel(rmath('Number of days between observations'))
-    # print xticklabels
-
-    if 1:
+        # Create more human-readable axis
         fig.set_size_inches(15., 4 * 1.5)
         # fig.subplots_adjust(bottom=0.25)
         ax3 = ax2.twiny()
@@ -250,14 +251,20 @@ def plot_time_coverage(cutout_dates, opath):
         ax3.set_xlim(bins.min(), bins.max())
         ax3.set_xlabel(rmath('Time between observations'))
 
-    # Add twiny axis which gives the time in human-readable format
+        fig.tight_layout()
+        plt.savefig(os.path.join(opath, 'stats.pdf'))
+        # plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
 
-    fig.tight_layout()
-    # Save it in the dimension subdirectory as above.
-    plt.savefig(os.path.join(opath, 'stats.pdf'))
-    # plt.savefig(os.path.join(opath, 'stats.png'), dpi=72)
+        plt.close(fig)
 
-    plt.close(fig)
+    except:
+        err_msg = 'plot_time_coverage: AN ERROR OCCURRED !'
+        print err_msg
+        print 'plot_time_coverage: Skipping output for this CS instance ...'
+        print 'plot_time_coverage: Saving incident in errors.log'
+        ofname = os.path.join(opath, 'errors.log')
+        with open(ofname, 'a') as fsock:
+            fsock.write('{}\n'.format(err_msg))
 
 
 def plot_background_models(cs):
