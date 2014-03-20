@@ -266,6 +266,16 @@ def plot_time_coverage(cutout_dates, opath):
         with open(ofname, 'a') as fsock:
             fsock.write('{}\n'.format(err_msg))
 
+        # There are not going to be many of these
+        # (the first occurred almost halfway through tlist),
+        # but since an open figure slows things down a bit,
+        # it should be closed if possible.
+        if 'fig' in dir():
+            try:
+                plt.close(fig)
+            except:
+                pass
+
 
 def plot_background_models(cs):
 
