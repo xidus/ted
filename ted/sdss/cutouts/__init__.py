@@ -281,7 +281,7 @@ class CutoutSequence(object):
     # The memory hurdle
     # -----------------
 
-    def load(self, pad=0, bg_model='median', force=False):
+    def load(self, pad=0, bg_model='median', quality=[1, 2, 3], force=False):
         """
         Load remapped cutouts and perform preliminary steps for the analysis
 
@@ -307,7 +307,7 @@ class CutoutSequence(object):
 
         # Load data cube
         # self.load_cutouts(which='residual', pad=pad)
-        self.load_registered_cutouts(pad=pad)
+        self.load_registered_cutouts(pad=pad, quality=quality)
 
         # Create background models
         # mean and median
@@ -443,7 +443,7 @@ class CutoutSequence(object):
 
         # Load a file or calculate again?
         if os.path.isfile(fname):
-            self.fields = pd.read_csv(self.file('fields'))
+            self.fields = load_fields()
 
             # Plot coverage overview for given cutout
             # Un-commenting reason: see last lines of self.create_raw_cutouts()
@@ -1416,7 +1416,7 @@ wcsremap \
     #         # which := residual
     #         self._load_cube_residual(pad=pad)
 
-    def load_registered_cutouts(self, pad=0):
+    def load_registered_cutouts(self, pad=0, quality=[1, 2, 3]):
         """
         Load all remapped images
 
@@ -1440,7 +1440,23 @@ wcsremap \
 
         """
 
-        files = self.get_filenames('wcsremap', '*.fit')
+        # files = self.get_filenames('wcsremap', '*.fit')
+
+        """Assume that quality is a list"""
+        if not isinstance(quality, list):
+            print '`quality` is not a list instance ...'
+            raise SystemExit
+
+        # Define filename for previously/to-be saved output
+        fname = os.path.join(self.path('coord'), 'cutouts+qualityflags.csv')
+        files = pd.read_csv(fname)
+
+        # Select the cutouts with the specified quality flags
+        qix = np.ones(files.shape[0]).astype(bool)
+        for q in quality:
+            qix &= (files.quality == q)
+        files = files.iloc[qix]
+
         cube_shape = self.size + (len(files),)
         self._cube_remap = np.zeros(cube_shape)
         for i, ifname in enumerate(files):
@@ -1804,7 +1820,7 @@ def get_covering_fields(radec):
     # raise SystemExit
 
     # Raw list of fields
-    fields = pd.read_csv(env.files.get('fields'), sep=',')
+    fields = load_fields()
 
     # Get indices for fields that cover the chosen coordinate
     RA_geq_ramin = (fields.raMin <= radec_[0])
@@ -1895,6 +1911,10 @@ def write_cutout_sequence_summary(cs):
 # Control programs
 # ----------------
 
+def load_fields():
+    return pd.read_csv(env.files.get('fields'), sep=',')
+
+
 def load_snlist():
     return pd.read_csv(env.files.get('snlist'), sep=';')
 
@@ -1905,6 +1925,15 @@ def load_gxlist():
 
 def load_tlist():
     return pd.read_csv(env.files.get('tlist'))
+
+
+def load_fp2q():
+    ifname = env.files.get('fp2q')
+    try:
+        return pd.read_csv(ifname, index_col=[0])
+    except:
+        print 'There was an error when trying to load', ifname, '...'
+        return None
 
 
 def update_tlist(css, targets):
@@ -2016,7 +2045,7 @@ def load_all_cutout_sequences():
     return np.array(cutout_sequences), np.array(targets)
 
 
-def get_cutout_sequences():
+def load_cutout_sequences():
     """
     Returns
     -------
@@ -2091,7 +2120,7 @@ def create_cutout_data():
     log_passed = ' passed !'
 
     # Load the data
-    css, targets = get_cutout_sequences()
+    css, targets = load_cutout_sequences()
 
     # There will be flagged cutouts sequences, so load these data sets
     # separately instead of every time a flag is encountered.
@@ -2206,25 +2235,25 @@ def do_grid_search(N_folds=5):
 
     """
 
-    css, targets = get_cutout_sequences()
+    # Load the data
+    css, targets = load_cutout_sequences()
+
+    # Define chunk sizes
+    # ------------------
 
     # Create training and test data sets
     N_css = css.size
     N_items = N_css / N_folds # Assumes that N_css % N_folds == 0
+    # N_items is the number of samples per chunk
+    # It is therefor also the number of test samples laid aside while training.
+    N_train = N_css - N_items
 
-    # 1-fold CV to begin with
-
-    # Select TEST data data and labels
-    css_test = css[:N_items]
-    targets_test = targets[:N_items]
-
-    # Select TRAINING data data and labels
-    css_train = css[N_items:]
-    targets_train = targets[N_items:]
+    # HYPER PARAMETERS
+    # ----------------
 
     # Define hyper-parameter space
     N_sigmas = 3
-    N_taus = 3
+    N_taus = 5
 
     # Calculate scales based in pixel radii
     radii = np.linspace(5, 7, N_sigmas)
@@ -2232,11 +2261,38 @@ def do_grid_search(N_folds=5):
     sigmas = radii / np.sqrt(2)
 
     # Set relative thresholds
-    taus = np.linspace(.50, .70, N_taus)
+    taus = np.linspace(.50, 1.0, N_taus)
+
+    # 1-fold CV to begin with
+
+    if 1:
+        # Select TEST data data and labels
+        css_test = css[:N_items]
+        targets_test = targets[:N_items]
+
+        # Select TRAINING data data and labels
+        css_train = css[N_items:]
+        targets_train = targets[N_items:]
+
+    else:
+
+        for i in N_folds:
+
+            # CREATE AN ITERATOR GENERATOR?
+
+            left = i * N_items
+            right = i * N_items
+
+            # Select TEST data data and labels
+            css_test = css[:N_items]
+            targets_test = targets[:N_items]
+
+            # Select TRAINING data data and labels
+            css_train = css[N_items:]
+            targets_train = targets[N_items:]
 
     # Cube of predictions
     # N_sigmas x N_taus
-    N_train = N_css - N_items
     cube_predict = np.zeros((N_sigmas, N_taus, N_train)).astype(bool)
 
     print '\nNumber of training samples:', N_train
@@ -2348,6 +2404,122 @@ def do_grid_search(N_folds=5):
     ofname_test = os.path.join(cs.path('root'), 'accuracy_test')
     with open(ofname_test, 'w+') as fsock:
         fsock.write('{}\n'.format(accuracy))
+
+
+def create_cutout_original_to_field_quality_dict():
+    """
+    Build dictionary (YAML) for all the fields where the key is the
+    basename of the filename for every possible frame (including invalid
+    and non-exisiting), and the value is the quality of the field that
+    corresponds to this frame.
+
+    Side effects
+    ------------
+    framepath2quality.yaml : file
+        The resulting dictionary created from the above operations and
+        saved as a YAML document that can be used to generate list of
+        cutout 2 quality mapping for each cutout sequence.
+
+    """
+
+    fields = load_fields()
+
+    if 0:
+        fp2q = {}
+        for i in range(fields.shape[0]):
+
+            print '{: >6d}'.format(i),
+            if i and not ((i + 1) % 10):
+                print ''
+
+            field = fields.iloc[i:i + 1]
+            filename = frame_path(field)
+            basename = os.path.basename(filename)
+            fp2q[basename] = int(fields.quality[i])
+
+        # Make sure that the next output starts on a new line
+        print ''
+
+        # Save the data
+        ykw = dict(default_flow_style=False, explicit_start=True, indent=2)
+        with open(env.files.get('fp2q'), 'w+') as fsock:
+            yaml.dump(fp2q, stream=fsock, **ykw)
+
+    else:
+
+        fnames = []
+        qflags = []
+        for i in range(fields.shape[0]):
+
+            print '{: >6d}'.format(i),
+            if i and not ((i + 1) % 10):
+                print ''
+
+            field = fields.iloc[i:i + 1]
+            filename = frame_path(field)
+            basename = os.path.basename(filename)
+            fnames.append(basename)
+            qflags.append(int(fields.quality[i]))
+
+        df = pd.DataFrame(data=qflags, columns=['quality'], index=fnames)
+        df.to_csv(env.files.get('fp2q'), index=True, header=True)
+
+
+def create_cutout2quality_mapping():
+    """
+    Run through every coordinate on tlist and load every raw cutout that
+    was made. From the header of each of these files, obtain the quality
+    flag by using the ORIGINAL header keyword as key in the dictionary
+    above.
+
+    Side effects
+    ------------
+    qualityflags
+
+    """
+
+    # tlist = load_tlist()
+    css, targets = load_cutout_sequences()
+
+    # Load framepath2quality dictionary
+    fp2q = load_fp2q()
+
+    if fp2q is None:
+        print 'fp2q dictionary could not be loaded ...'
+        raise SystemExit
+
+    for i, cs in enumerate(css):
+
+        print '{: >4d}'.format(i),
+        if i and not ((i + 1) % 10):
+            print ''
+
+        # Define output filename for the records
+        ofname = os.path.join(cs.path('coord'), 'cutouts+qualityflags.csv')
+
+        # Get the filenames (to become one column in the DataFrame)
+        filenames = cs.get_filenames(path='wcsremap', match='*.fit')
+
+        # Get the corresponding quality flag from the previously created fp2q.
+        qflags = []
+        # In case a key error is caught, only save the filenames with key.
+        fnames = []
+        for fname in filenames:
+            h = fits.getheader(fname)
+            original = h['ORIGINAL']
+            try:
+                quality = int(fp2q.ix[original])
+            except KeyError:
+                print 'E!    ',
+                continue
+            qflags.append(quality)
+            fnames.append(fname)
+
+        # Save the data in `ofname`
+        data = np.array([fnames, qflags]).T
+        columns = ['fname', 'quality']
+        df = pd.DataFrame(data=data, columns=columns)
+        df.to_csv(ofname, index=False, header=True)
 
 
 def main():
