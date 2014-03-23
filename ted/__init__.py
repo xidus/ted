@@ -104,7 +104,8 @@ class Environment(object):
 
     def __init__(self):
 
-        self._check_source_files()
+        # self._check_source_files()
+        self.update_base()
         self.load()
 
     def load(self):
