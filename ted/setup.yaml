@@ -32,6 +32,8 @@ files:
 
   # Query results
   fields: [*data, cas, fields.csv]
+  # fp2q: [*data, cas, framepath2quality.yaml]
+  fp2q: [*data, cas, fp2q.csv]
 
   # Obtained 2014-01-28
   galaxies: [*data, cas, galaxies, stripe82_galaxies.csv]
@@ -40,6 +42,7 @@ files:
 
   # Generated from fields.csv
   nrecords: [*data, cas, nfieldrecords.dat]
+  nrecords_q: [*data, cas, nfieldrecords_quality.dat]
 
   # Merged list of supernovae candidates
   snlist: [*data, snlists, snlist_merged.csv]
