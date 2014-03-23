@@ -685,6 +685,8 @@ def check_tlist():
             fsock.write('\n'.join(np.array(data).astype(str)))
 
     if 0:
+        import matplotlib as mpl
+        mpl.use('pdf')
         import matplotlib.pyplot as plt
 
         from mplconf import mplrc
@@ -913,6 +915,32 @@ def filter_invalid_from_unique_field_list(dra_min=.1, dra_max=1.):
     shutil.copyfile(fname, '{}.orig'.format(fname))
 
     df = pd.read_csv(fname, sep=',')
+
+    """
+    2014-03-22
+    ----------
+    There may be some errors in this procedure.
+    Some dra may be negative because raMax is just above 0 degrees, and raMin
+    is just below 360 deg. My general subtraction procedure in the IPython
+    notebook (stripe82_stats.ipynb) may be flawed, even though I meant for it
+    to counter this particular problem.
+        At this point, the frames have been downloaded, and the cutouts have
+    been made, so it may be a waste of time to download further 1026 frames
+    and include them in the cutout-sequnces.
+        The 1026 'invalid' entries that could potentially be made valid again
+    include coadded entries and many entries with a BAD quality flag.
+        Getting to know the data is apparently a back-and-forth procedure in
+    terms of understanding how to code up the algorithms that make use of them.
+
+    There is a big difference bwteeen what input is used here compared to the
+    way that I check for discrepancies in the original notebook.
+
+    In the notebook, I first subtract 360.0 from the coordinates, RIGHT? (I still seem to get the same number of invalids...)
+
+    Add to Mistakes unmendable / or mendable mistakes if time.
+
+    """
+
     dra = df.raMax - df.raMin
 
     dra_too_small_ix = (dra < dra_min)
@@ -958,43 +986,62 @@ def count_field_records():
         fsock.write('\n'.join(counts))
 
 
-def DEPRECATED_count_field_records():
+def count_field_records_by_quality():
     """
     Count the number for field records obtained for
     each SN, and save those numbers for later plotting.
 
     """
 
-    ipath = os.path.join(_path_cas, 'fields')
-    iglob = os.path.join(ipath, '*.csv')
-    nfname = os.path.join(_path_cas, 'nfieldrecords.dat')
+    import glob
+    import pandas as pd
 
-    commands = [
+    iglob = os.path.join(_path_cas, 'fields', '*.csv')
+    filenames = sorted(glob.glob(iglob))
 
-        # Count the number of records found for each coordinate
-        # Including the header which is subtracted when showing th stats.
-        'wc -l {iglob} > {n}'.format(iglob=iglob, n=nfname),
+    df_fields = pd.read_csv(env.files.get('fields'), sep=',')
+    print 'Number of fields:', df_fields.shape[0]
 
-        # # Extract the number of results. Save output to temporary file.
-        # 'sed "$d" < {n} > tempfile'.format(n=nfname),
+    # FieldQuality Data values
+    # name          value   description
+    # BAD           1       Not acceptable for the survey
+    # ACCEPTABLE    2       Barely acceptable for the survey
+    # GOOD          3       Fully acceptable -- no desire for better data
+    # MISSING       4       No objects in the field, because data is missing.
+    #                       We accept the field into the survey as a HOLE
+    # HOLE          5       Data in this field is not acceptable, but we will
+    #                       put the field into the survey as a HOLE, meaning
+    #                       none of the objects in the field are part of the
+    #                       survey.
+    # See: http://cas.sdss.org/stripe82/en/help/browser/enum.asp?n=FieldQuality
+    qualities = range(1, 4)
+    qices = [(df_fields.quality.values == q) for q in qualities]
+    fdict = {q: df_fields.iloc[qix] for (q, qix) in zip(qualities, qices)}
+    cdict = {q: [] for q in qualities}
 
-        # # Move the files
-        # 'mv {n} {n}.old'.format(n=nfname),
-        # 'mv tempfile {n}'.format(n=nfname),
-    ]
+    for i, qix in enumerate(qices):
+        print 'Number of fields with quality {:d}: {: >3d}'.format(
+            i + 1, qix.sum())
+    print 'For qualities 4 and 5, there were not present in my filtered dataset'
 
-    for cmd in commands:
-        print cmd
-        os.system(cmd)
+    beg = time.time()
+    for i, ifname in enumerate(filenames):
+        df_results = pd.read_csv(ifname, sep=',')
+        counts = [0] * len(qualities)
+        for j in range(df_results.shape[0]):
+            for k, q in enumerate(qualities):
+                ices = (fdict[q]['fieldID'] == df_results.iloc[j]['fieldID'])
+                counts[k] += ices.sum()
+        step = time.time()
+        Dt = format_HHMMSS_diff(beg, step)
+        print '{: >4d}, {}: {: >3d}, {: >3d}, {: >3d}'.format(i, Dt, *counts)
+        for k, q in enumerate(qualities):
+            cdict[q].append(counts[k])
 
-    # This is instead of running the last three commands in the commands list.
-    # ... since they did not work, when run from Python.
-
-    # Doing it in Python instead.
-    import numpy as np
-    nfieldrecords = np.loadtxt(nfname, usecols=[0], dtype=[('', int)])
-    with open(nfname, 'w+') as fsock:
-        fsock.write('\n'.join(nfieldrecords[:-1].astype(str)))
+    list_of_lists = [cdict[q] for q in qualities]
+    with open(env.files.get('nrecords_q'), 'w+') as fsock:
+        for row in zip(*list_of_lists):
+            fsock.write('{},{},{}\n'.format(*row))
 
 
 def query(sql_raw):
