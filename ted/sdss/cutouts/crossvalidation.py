@@ -108,9 +108,9 @@ class CVHelper(object):
                 self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
 
             except Exception as e:
-                print fnum, 'train'
-                print train_f.shape, train_l.shape
-                print e.message
+                print '_cv_any:', fnum, 'train'
+                print '_cv_any:', train_f.shape, train_l.shape
+                print '_cv_any:', e.message
 
             try:
                 # raise Exception
@@ -121,9 +121,9 @@ class CVHelper(object):
                 self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
 
             except Exception as e:
-                print fnum, 'test'
-                print test_f.shape, test_l.shape
-                print e.message
+                print '_cv_any:', fnum, 'test'
+                print '_cv_any:', test_f.shape, test_l.shape
+                print '_cv_any:', e.message
 
     # Grid search
     # -----------
@@ -151,8 +151,8 @@ class CVHelper(object):
     def _moa_any(self, cop, labels):
         """Store training accuracies for experiment ANY.
         A.k.a.: matrix of accuracies (moa)."""
-        print 'CoP.shape:', cop.shape
-        print 'Labels.shape:', labels.shape
+        print '_moa_any:', 'CoP.shape:', cop.shape
+        print '_moa_any:', 'Labels.shape:', labels.shape
         return (
             # Broadcast along the parameter axes
             (cop == labels[None, None, :])
