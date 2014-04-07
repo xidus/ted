@@ -1,0 +1,66 @@
+# Cross validation (cv) options
+# -----------------------------
+
+cv:
+  # Type :: int
+  N_folds: 5
+
+  # Default experiment to run
+  # Type :: str
+  exp_default: any
+
+
+# Load options for CutoutSequence (cs) instances
+# -----------------------------------------
+
+cs:
+
+  # Accepted qualities to load
+  # Can also be set directly
+  # Type :: list
+  # Options :: [1, 2, 3]
+  # quality: [1, 2, 3]
+  quality: [3]
+
+  # How much of the border of the frames to clip?
+  # Type :: int
+  clip: 10
+
+  # Which backround model to use?
+  # Type :: str
+  # Options :: [median, mean]
+  bg_model: median
+
+  # Which cutout size to use?
+  # Status :: NotImplemented
+  # Type :: list
+  # size: [101, 101]
+
+  # How to create the residuals?
+  # Status :: NotImplemented
+  # Type :: str
+  # residual: naive
+  # residual: hotpants
+
+
+# Experiment options
+# ------------------
+
+xp:
+
+  # The only experiment so far
+  any:
+
+    # Scale to smooth to
+    # Type :: dict
+    sigmas:
+      start: 1
+      stop: 5
+      num: 5
+
+    # Relative thresholds
+    # Type :: dict
+    taus:
+      start: .0
+      stop: 1.
+      num: 50
