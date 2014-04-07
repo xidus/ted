@@ -99,6 +99,8 @@ class CVHelper(object):
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
             try:
+                raise Exception
+
                 # Training set
                 cop = self._cop_any(train_f)
                 moa = self._moa_any(cop, test_f)
@@ -110,6 +112,8 @@ class CVHelper(object):
                 print e.message
 
             try:
+                raise Exception
+
                 # Test set
                 cop = self._cop_any(test_f)
                 moa = self._moa_any(cop, test_l)
@@ -233,7 +237,7 @@ class CVHelper(object):
         fname = self._fn_fstr.format(*self._fn_kw(ftype=ftype, fnum=fnum))
         ofname = os.path.join(self._opath, fname)
         print 'Saving fold results to:', ofname
-        print moa.shape
+        # print moa.shape
         df = pd.DataFrame(data=moa, index=self.xp.sigmas, columns=self.xp.taus)
         df.to_csv(ofname, index=True, header=True)
         return ofname
