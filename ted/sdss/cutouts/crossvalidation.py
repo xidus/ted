@@ -460,7 +460,8 @@ class CVHelper(object):
         # fig.colorbar(mappable=im, ax=ax, **cbkw)
 
         fig.tight_layout()
-        fname = 'moa_train_folds+best.pdf'
+        qstr = self._qstr(self._cs.get('quality'))
+        fname = 'moa_train_folds+best_Q-{}.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
 
@@ -504,7 +505,7 @@ class CVHelper(object):
         # fig.colorbar(mappable=im, ax=ax, **cbkw)
 
         fig.tight_layout()
-        fname = 'moa_test_folds+best.pdf'
+        fname = 'moa_test_folds+best_Q-{}.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
 
