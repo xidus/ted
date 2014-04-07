@@ -208,7 +208,10 @@ class CVHelper(object):
         # Hard-coded path for now ...
         # Would be nice, if the cutout size
         # could be stored in parameters.yaml.
-        return os.path.join(env.paths.get('cutouts'), '101x101', 'results')
+        opath = os.path.join(env.paths.get('cutouts'), '101x101', 'results')
+        if not os.path.exists(opath):
+            os.makedirs(opath)
+        return opath
 
     @property
     def _fn_fstr(self):
