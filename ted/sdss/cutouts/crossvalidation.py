@@ -99,11 +99,12 @@ class CVHelper(object):
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
             try:
-                raise Exception
+                # raise Exception
 
                 # Training set
                 cop = self._cop_any(train_f)
                 moa = self._moa_any(cop, test_f)
+
                 self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
 
             except Exception as e:
@@ -112,7 +113,7 @@ class CVHelper(object):
                 print e.message
 
             try:
-                raise Exception
+                # raise Exception
 
                 # Test set
                 cop = self._cop_any(test_f)
@@ -137,7 +138,8 @@ class CVHelper(object):
         N = features.shape[0]
         cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
         for k, cs in enumerate(features):
-            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time + 1800.:
                 cop[:, :, k] = cs.gs_prediction
             else:
                 cs.load(**self._cs)
@@ -149,8 +151,8 @@ class CVHelper(object):
     def _moa_any(self, cop, labels):
         """Store training accuracies for experiment ANY.
         A.k.a.: matrix of accuracies (moa)."""
-        # print cop.shape
-        # print labels.shape
+        print cop.shape
+        print labels.shape
         return (
             # Broadcast along the parameter axes
             (cop == labels[None, None, :])
