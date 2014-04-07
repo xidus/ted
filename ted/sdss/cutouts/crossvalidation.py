@@ -460,7 +460,7 @@ class CVHelper(object):
 
             # Rest of the plot setup
             ax_bot.set_xlabel(r'$\tau$')
-            ax_bot.set_xticks([.1, .5, 1.])
+            ax_bot.set_xticks([.0, .5, 1.])
             if i == 0:
                 ax_top.set_ylabel(r'$\sigma$')
                 ax_bot.set_ylabel(r'$\sigma$')
@@ -505,7 +505,7 @@ class CVHelper(object):
 
             # Rest of the plot setup
             ax_bot.set_xlabel(r'$\tau$')
-            ax_bot.set_xticks([.1, .5, 1.])
+            ax_bot.set_xticks([.0, .5, 1.])
             if i == 0:
                 ax_top.set_ylabel(r'$\sigma$')
                 ax_bot.set_ylabel(r'$\sigma$')
