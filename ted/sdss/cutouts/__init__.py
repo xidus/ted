@@ -40,12 +40,12 @@ from .plotting import plot_covering
 from .plotting import plot_possible_cutouts
 # from .plotting import plot_pixel_indices
 from .plotting import plot_time_coverage
-from .plotting import plot_background_models
 
-if 0:
-    from .plotting import plot_residual_samples
-    from .plotting import plot_LoG_samples
-    from .plotting import plot_binary_fields
+# MAinly called from illustration control
+from .plotting import plot_background_models
+from .plotting import plot_residual_samples
+from .plotting import plot_LoG_samples
+from .plotting import plot_binary_fields
 
 # from .plotting import plot_histogram_intensity
 
@@ -59,6 +59,25 @@ class FITSHeaderError(TEDError): pass
 class CutoutSequenceError(TEDError): pass
 
 
+class Log(object):
+
+    def __init__(self, fname, sep=','):
+        self.fname = fname
+        self.sep = sep
+
+    def _log(self, s):
+        with open(self.fname, 'a') as fsock:
+            fsock.write('{}\n'.format(s))
+
+    def log(self, s):
+        now = dt.datetime.now().isoformat()
+        self._log('{now}{sep}{s}'.format(
+                now=now, sep=self.sep, s=s))
+
+    def log_empty(self):
+        self._log('')
+
+
 class CutoutSequence(object):
     """
     A cutout sequence for a given coordinate and cutout size.
@@ -66,9 +85,6 @@ class CutoutSequence(object):
     To make a cutout, the following is needed:
 
     *   a coordinate covered by the data, e.g. from
-
-        *   snlist (choose number, when loading)
-        *   gxlist
 
     *   The size of the cutout
 
@@ -111,7 +127,7 @@ class CutoutSequence(object):
         self.radec = np.array(radec)[None, :]
         self.size = tuple(size)
         # May probably need to be changed to some more general labeling scheme.
-        self.is_sn = is_sn
+        self.is_sn = bool(is_sn)
 
         # Get uniquely-formatted coordinate and size string
         self.crd_str = crd2str(self.radec.ravel())
@@ -123,18 +139,16 @@ class CutoutSequence(object):
         # print 'Distance to image edge pixels (dy, dx)', dy, dx
 
         # Prepare the coordinate input for the conversion from WCS to pixels
-        # one where input is ordered (RA, Dec) and
-        # one where input is ordered (Dec, RA)
+        # where input is ordered (RA, Dec) and
+        # where input is ordered (Dec, RA)
         self.world = radec[None, :]
         self.world_r = radec[::-1][None, :]
-        # print '(RA, Dec) =', world
-        # print '(Dec, RA) =', world_r
-
-        # Create empty dictionary for the background models (templates)
-        self.bg_models = {}
 
         # Define directory paths for this instance
         self.define_directory_paths()
+
+        # Create empty dictionary for the background models (templates)
+        self.bg_models = {}
 
         # Create a dictionary for saved steps
         self._file = {}
@@ -281,16 +295,16 @@ class CutoutSequence(object):
     # The memory hurdle
     # -----------------
 
-    def load(self, pad=0, bg_model='median', quality=[1, 2, 3], force=False):
+    def load(self, clip, bg_model, quality, force=False):
         """
         Load remapped cutouts and perform preliminary steps for the analysis
 
         Parameters
         ----------
-        pad : int, 0 < min(self.size)
+        clip : int, 0 < min(self.size)
             The registered frames have border effects from the resampling. Use
-            pad to focus the analysis only on the central part of the frames.
-            Only pixels that are farther than <pad> number of pixels from the
+            clip to focus the analysis only on the central part of the frames.
+            Only pixels that are farther than <clip> number of pixels from the
             border of the frames.
         bg_model : str, choice
             Which background model to subtract from the remapped frames to
@@ -305,64 +319,46 @@ class CutoutSequence(object):
 
         """
 
-        # Load data cube
-        # self.load_cutouts(which='residual', pad=pad)
-        self.load_registered_cutouts(pad=pad, quality=quality)
+        # Set the clip size
+        self.set_clip(clip)
 
-        # Create background models
-        # mean and median
-        self.calculate_background_models()
+        # Set the background model once for easy reference
+        self.set_bg_model(bg_model)
 
-        # Make output
-        plot_background_models(self)
+        # Set qualities to load into memory
+        self.set_load_quality(quality)
 
-        # Residuals
-        self.calculate_residuals(bg_model=bg_model)
+        # Load data into memory
+        self.load_registered_cutouts()
 
-    # Work horses
-    # -----------
+    def set_clip(self, clip=0):
+        self.clip = clip
 
-    def is_transient(self, experiment='any'):
-        """
-        Finds out if there is a transient event in the sequence or not.
+    def set_bg_model(self, bg_model=None):
+        self.bg_model = bg_model
 
-        Parameters
-        ----------
-        sigma : float
-            Width of the LoG filter
-        tau : float, 0 < tau < 1
-            The relative intensity threshold above img(max - min) * tau
-            of which at least one local maximum has to be in any of the
-            images in order for the function to return True.
+    @staticmethod
+    def _check_quality(quality):
+        if not isinstance(quality, list):
+            print '`quality` is not a list instance ...'
+            raise SystemExit
 
-        Returns
-        -------
-        has_detected_transient : bool
-            Whether or not a single local maximum in any of the cutouts is
-            above the threshold defined by tau and at the given blob scale.
+    def set_load_quality(self, quality):
+        """Set the qualities to load into memory"""
+        self._check_quality(quality)
+        self.load_quality = quality
 
-        """
+    def set_quality(self, quality):
+        """Set the quality to use for the analysis"""
+        self._check_quality(quality)
+        self.quality = quality
 
-        if experiment == 'any':
-            """
-            Experiment: Just see if there is anything.
+    @property
+    def template(self):
+        return self.bg_models.get(self.bg_model)
 
-            Is there any positive reponse at all and anywhere
-            in the sequence, i.e. the cube of images?
-
-            """
-            return np.any(self.cube_threshold.ravel())
-
-            """
-            Experiment: Positive only if consistens consecutive position of a signal.
-
-            """
-
-    def clear(self):
-        """
-        Clears loaded and generated data variables
-
-        """
+    def cleanup(self):
+        """Clears loaded and generated data variables from memory."""
         for key in dir(self):
             if '__' not in key and 'cube_' in key:
                 print 'Clearing', key, '...'
@@ -474,12 +470,18 @@ class CutoutSequence(object):
 
         Side effects
         ------------
-        self.files : list
-            list of filenames for the covering and existing frames
+        self.frames : str, 1D-array
+            Filenames for the existing and non-coadded frames
+        self.frames_coadded : str, 1D-array
+            Filenames for the existing and coadded frames
+        self.frames_invalid_FITS : str, 1D-array
+            Filenames for the existing frames woth invalid content
+        self.frames_nonexsitent : str, 1D-array
+            Filenames for the non-existing frames
 
         Dependencies
         ------------
-        self.get_covering_fields() needs to have been run.
+        self.get_covering_fields()
 
         """
 
@@ -629,7 +631,6 @@ class CutoutSequence(object):
             # I have not solved the problem of why the filenames can not be
             # loaded, so I am getting them in this way instead.
             self.cutouts = self.get_filenames(path='fits', match='*.fit.gz')
-
 
             # # Load row and col pixel indices
             # # cutouts only
@@ -1287,100 +1288,10 @@ wcsremap \
 
             # print(cmd_wcsremap)
             os.system(cmd_wcsremap)
-
-        print '\n'
-
-    def DEV_wcsremap(self):
-
-        # WCSREMAP
-        import glob
-
-        # iglob = os.path.join(self.path('gunzip'), '*.fit')
-        iglob = os.path.join(self.path('gunzip'), '*.fit')
-        files = sorted(glob.glob(iglob))
-
-        # Set the template frame to be the first in the time series.
-        template_frame = files[0]
-
-        # Not specifying complete path, since environment should be set
-        # on my own machine as well as on the image server.
-        cmd_kw = dict(template=template_frame)
-        cmd_wcsremap_fstr = '''\
-wcsremap \
--template {template} \
--source {ifname} \
--outIm {ofname}\
-'''
-
-        # Do I need noise-output images?
-        # This is a measure of the pixel-to-pixel
-        # covariance for the resampled frames.
-
-        print 'Processing files:'
-        for i, ifname in enumerate(files):
-            print '{: >3d}, '.format(i),
-            if i and not (i + 1) % 10:
-                print ''
-            fname = os.path.basename(ifname)
-            ofname = os.path.join(self.path('wcsremap'), fname)
-            # print ifname
-            # print ofname
-            cmd_kw.update(ifname=ifname, ofname=ofname)
-            cmd_wcsremap = cmd_wcsremap_fstr.format(**cmd_kw)
-
-            # print(cmd_wcsremap)
-            os.system(cmd_wcsremap)
-
         print '\n'
 
     # Service methods for loading and initialising the data for the analysis
     # ----------------------------------------------------------------------
-
-    # def create_residuals(self, bg_model='median'):
-    #     """
-    #     Creates residual images from the WCSREMAP'ed frames
-    #     and saves them to disk in FITS format.
-
-    #     Side effects
-    #     ------------
-    #     self.cube_residual : 3D-array
-    #     Files on disk located at self.path('residual')
-
-    #     """
-
-    #     # Get self.cube_remap if not already in memory
-    #     if not 'cube_remap' in dir(self):
-    #         self._load_cube_remap()
-
-    #     # Get self.template_median|mean
-    #     self.calculate_background_models()
-
-    #     # Get self.cube_residual
-    #     self.calculate_residuals(bg_model=bg_model)
-
-    #     # Get output filenames for residuals
-    #     ifiles = self.get_filenames('wcsremap', '*.fit')
-    #     ofiles = self.replace_in_string_list(ifiles, 'wcsremap', 'residual')
-
-    #     # Get WCS header from template file.
-    #     hdulist = fits.open(ifiles[0])
-    #     _header = hdulist[0].header
-    #     hdulist.close()
-
-    #     # import copy
-
-    #     for i, ofname in enumerate(ofiles):
-    #         print '{: >3d}'.format(i),
-    #         if i and not (i + 1) % 10: print ''
-    #         # header = copy.deepcopy(_header)
-    #         # header.set('', )
-    #         fitskw = dict(data=self.cube_residual[:, :, i], header=_header)
-    #         hdu = fits.PrimaryHDU(**fitskw)
-    #         hdu.writeto(ofname)
-
-    # def replace_in_string_list(self, list_=None, from_=None, to=None):
-    #     """Do same replacement for each string in a list."""
-    #     return map(lambda s: s.replace(from_, to), list_)
 
     def get_filenames(self, path=None, match=None):
         """Get all files within directory specified by path."""
@@ -1388,35 +1299,7 @@ wcsremap \
         iglob = os.path.join(self.path(path), match)
         return sorted(glob.glob(iglob))
 
-    # def load_cutouts(self, which=None, pad=0):
-    #     """
-    #     Loads a data cube of the chosen kind.
-
-    #     Parameters
-    #     ----------
-    #     which : str | list of strings
-    #         What data to load? Choose among the following:
-    #         * remap : the WCSREMAP'ed .fit-files
-    #         * residual : the residual images .fit-files
-
-    #     Side effects
-    #     ------------
-    #     self.cube_<which> : 3D-array
-    #         Data cube containing cutout frames of the <which> kind.
-
-    #     Future
-    #     ------
-
-    #     """
-
-    #     if which == 'remap':
-    #         self._load_cube_remap()
-
-    #     else:
-    #         # which := residual
-    #         self._load_cube_residual(pad=pad)
-
-    def load_registered_cutouts(self, pad=0, quality=[1, 2, 3]):
+    def load_registered_cutouts(self):
         """
         Load all remapped images
 
@@ -1427,66 +1310,121 @@ wcsremap \
 
         Side effects
         ------------
+        self._files : pandas.DataFrame
+            Holds the list of filenames that were loaded after excluding
+            filenames for which the file could not be loaded or the file
+            quality did not match the desired list of qualities.
+
         self.cube_remap : 3D-array
             Data cube containing the remapped cutout frames.
-
-        Future
-        ------
-        Check integrity of the fits files found in the directory.
-        Try: to load each image and save it into the data cube.
-        Except: failed read-ins. Save the filename in list self.wcsremap_failed
-        Else: Add the loaded image data to the cube. Save the filename into
-            list for future reference.
+        self._cube_remap : 3D-array
+            Data cube containing the *unclipped* remapped cutout frames.
 
         """
 
-        # files = self.get_filenames('wcsremap', '*.fit')
-
-        """Assume that quality is a list"""
-        if not isinstance(quality, list):
-            print '`quality` is not a list instance ...'
-            raise SystemExit
-
         # Define filename for previously/to-be saved output
-        fname = os.path.join(self.path('coord'), 'cutouts+qualityflags.csv')
+        fname = os.path.join(self.path('coord'), 'cutoutsio.csv')
+        print 'Loading', fname, '...'
         files = pd.read_csv(fname)
 
         # Select the cutouts with the specified quality flags
-        qix = np.ones(files.shape[0]).astype(bool)
-        for q in quality:
-            qix &= (files.quality == q)
+        # Include no-one to begin with:
+        qix = np.zeros(files.shape[0]).astype(bool)
+        for q in self.load_quality:
+            # Add if chosen
+            qix |= (files.quality == q)
         files = files.iloc[qix]
 
-        cube_shape = self.size + (len(files),)
-        self._cube_remap = np.zeros(cube_shape)
-        for i, ifname in enumerate(files):
+        # Select only usable cutouts
+        N_b = files.shape[0]
+        uix = (files.use == 1)
+        # Raises: NotImplementedError("iLocation based boolean indexing
+        #         on an integer type is not available")
+        # files = files.iloc[uix]
+        files = files.iloc[uix.values]
+        N_a = files.shape[0]
+        print '\nNumber of unusable cutouts:', N_b - N_a, '\n'
+
+        # Save the full images so that view can be changed during runtime.
+        self._cube_remap = np.zeros(self.size + (files.shape[0],))
+        breakout = False
+        for i in range(files.shape[0]):
+
             print '{: >3d}, '.format(i),
             if i and not (i + 1) % 10: print ''
+
+            ifname, qflag, uflag = files.iloc[i]
             hdulist = fits.open(ifname)
-            self._cube_remap[:, :, i] = hdulist[0].data
-            hdulist.close()
 
-        self.cube_remap = self.get_view(self._cube_remap, pad=pad)
+            try:
+                self._cube_remap[:, :, i] = hdulist[0].data
 
-    # def _load_cube_residual(self, pad=0):
+            except ValueError as err:
+                print '\nValueError:', err.message
+                print ifname.replace(env.paths.get('data'), '')
+                print 'Flagging cutout and starting over ...'
+                files.iloc[i:i + 1]['use'] = 0
+                files.to_csv(fname, index=False, header=True)
+                breakout = True
+                break
 
-    #     files = self.get_filenames('residual', '*.fit')
-    #     cube_shape = self.size + (len(files),)
-    #     self._cube_residual = np.zeros(cube_shape)
-    #     for i, ifname in enumerate(files):
-    #         print '{: >3d}, '.format(i),
-    #         if i and not (i + 1) % 10: print ''
-    #         hdulist = fits.open(ifname)
-    #         self._cube_residual[:, :, i] = hdulist[0].data
-    #         hdulist.close()
+            finally:
+                hdulist.close()
 
-    #     # Create view
-    #     self.cube_residual = self.get_view(self._cube_residual, pad=pad)
+        print '\n'
 
-    def get_view(self, data_cube, pad=0):
-        """Creates a padded view into the data cube."""
+        if breakout:
+            self.load_registered_cutouts()
+
+        else:
+
+            # Attach `files` to the instance
+            self._files = files
+            self._qualities = files.quality.values
+
+            # Set the quality to use to the same as the load quality.
+            self.set_quality(quality=self.load_quality)
+
+            # Calibrate the data used for the subsequent analysis
+            self.calibrate()
+
+    def calibrate(self, quality=None, clip=None):
+        """
+        Calibrate the data used for analysis
+
+        Parameters
+        ----------
+        quality : int, list, optional
+            List of quality flags to use in the analysis.
+            If None, the value set by self.quality is used.
+        clip : int, scalar, optional
+            How many pixels inwards to create the centered NumPy view of
+            each frame in the cube of images to use for the analysis.
+            If None, the value set by self.clip is used.
+
+        """
+
+        if quality is None:
+            quality = self.quality
+
+        if clip is None:
+            clip = self.clip
+
+        # Get indices for the data
+        qix = np.zeros(self._files.shape[0]).astype(bool)
+        for q in self.quality:
+            # Add if chosen
+            qix |= (self._files.quality == q)
+        qix = qix
+
+        # Save the stuff that is used in the analysis
+        self.cube_remap = self.get_view(self._cube_remap[:, :, qix], clip=clip)
+        self.files = self._files.iloc[qix]
+
+    def get_view(self, data_cube, clip=0):
+        """Creates a clipped view into the data cube."""
         Ny, Nx = self.size
-        return data_cube[pad:Ny - pad, pad:Nx - pad, :]
+        return data_cube[clip:Ny - clip, clip:Nx - clip, :]
 
     def calculate_background_models(self):
         """
@@ -1498,43 +1436,102 @@ wcsremap \
             Updated with the possible background models.
 
         """
-
         # Median gives sharper edges close to the zero-padding
         self.bg_models['median'] = np.median(self.cube_remap, axis=2)
 
         # Smoother edges, but results are affected by sharp transients
-        # self.template_mean = np.mean(self.cube_remap, axis=2)
         self.bg_models['mean'] = np.mean(self.cube_remap, axis=2)
 
-    def calculate_residuals(self, bg_model=None):
+    def calculate_residuals(self):
         """
         Calculate the residual images
 
-        Parameters
-        ----------
-        bg_model : str, choice
-            Chosen background model.
-
         Side effects
         ------------
-        self.template : 2D-array
+        self.template : float, 2D-array
             The chosen background model if available (None otherwise)
         self.cube_residuals : 3D-array
 
         """
-
-        self.template = self.bg_models.get(bg_model)
-        if self.template is None:
-            print 'Model not in ({}).'.format(', '.join(self.bg_models.keys()))
-            return None
+        # Make sure that the template is updated
+        self.calculate_background_models()
 
         # Subtract the background template
         self.cube_residual = self.cube_remap - self.template[:, :, None]
 
-    # Service methoids for the work horse method `self.is_transient`
+    # Service methods for the work-horse method `self.is_transient`
     # --------------------------------------------------------------
 
-    def calculate_LoG(self, **kwargs):
+    def predict(self, exp='any', **params):
+        """Get prediction from running the given experiment once."""
+        return getattr(self, 'experiment_' + exp)(**params)
+
+    def experiment_any(self, sigma, tau):
+        """
+        Parameters
+        ----------
+        sigma : float
+            scale for the LoG filter
+        tau : float
+            relative threshold
+
+        Returns
+        -------
+        prediction : bool, scalar
+            prediction
+
+        """
+        self.calculate_LoG(sigma=sigma)
+        self.compare_neighbours()
+        self.threshold_intensities(tau=tau)
+        return np.any(self.cube_threshold.ravel())
+
+    def gridsearch(self, exp='any', **params):
+        """Run grid search for given experiment"""
+        return getattr(self, 'gridsearch_' + exp)(**params)
+
+    def gridsearch_any(self, sigmas, taus):
+        """Run grid search for experiment 'ANY'"""
+
+         # Matrix of predictions (MoP)
+        predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
+
+        # Sigmas
+        for i, sigma in enumerate(sigmas):
+            # Set the scale of the objects that are looked for
+            # No need to perform LoG every time I change between thresholds
+            self.calculate_LoG(sigma=sigma)
+            self.compare_neighbours()
+
+            # Threshold values
+            for j, tau in enumerate(taus):
+                self.threshold_intensities(tau=tau)
+                # Save the resulting prediction (bool)
+                predictions[i, j] = np.any(self.cube_threshold.ravel())
+
+        # Save copy on disk
+        df = pd.DataFrame(data=predictions)
+        df.to_csv(self._fname_gsp, index=False, header=False)
+
+        return predictions
+
+    @property
+    def _fname_gsp(self):
+        return os.path.join(self.path('results'), 'prediction.csv')
+
+    @property
+    def has_gs_prediction(self):
+        return os.path.isfile(self._fname_gsp)
+
+    @property
+    def gs_prediction(self):
+        return pd.read_csv(self._fname_gsp, header=None).values
+
+    @property
+    def gs_prediction_time(self):
+        return os.path.getmtime(self._fname_gsp)
+
+    def calculate_LoG(self, sigma):
         """
         Calculate the Laplacian-of-Gaussian-filtered images
 
@@ -1542,11 +1539,8 @@ wcsremap \
 
         Parameters
         ----------
-        radius : float, int
-            The pixel radius of the blob. Probably an estimate.
         sigma : float
-            The width of the LoG filter. If radius is given, the given value
-            of sigma is ignored and instead calculated from radius.
+            The width of the LoG filter.
 
         Side effects
         ------------
@@ -1554,136 +1548,11 @@ wcsremap \
             The LoG-filtered residuals.
 
         """
+        msg('sigma = {: >5.2f} px'.format(sigma))
+        self.cube_LoG = LoG2Dstack(self.cube_residual, sigma=sigma)
 
-        if 'radius' in kwargs:
-            radius = kwargs.get('radius')
-            # np.sqrt(2) * sigma = radius (width) of LoG filter
-            # LoG(x, y) = (x ** 2 + y ** 2 - 2 * sigma ** 2) * G(x, y; sigma) / sigma ** 4
-            # G(x, y; sigma) = exp( - (x ** 2 + y ** 2) / (2 * sigma ** 2) )
-            sigma = radius / np.sqrt(2)
-
-        elif 'sigma' in kwargs:
-            # Now we have the width of the filter
-            sigma = kwargs.get('sigma')
-            radius = sigma * np.sqrt(2)
-
-        else:
-            print 'None of the required arguments were passed to the function.'
-            return
-
-        from scipy.ndimage import gaussian_laplace
-
-        msg('width (radius) = {: >.2f} px => sigma = {: >.2f} px'.format(
-            radius, sigma))
-
-        # For each image obtain LoG(x, y; sigma)
-        self.cube_LoG = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.shape[2]):
-            self.cube_LoG[:, :, i] = gaussian_laplace(
-                self.cube_residual[:, :, i], sigma=sigma
-            )
-
-    def DEV_compare_neighbours(self):
-        """
-        Eight-neighbour comparison
-
-        For each residual image I_R, create four copies
-        that are shifted, respectively,
-
-            N   W
-        * [-1, -1] (NW)
-        * [-1, +1] (NE)
-        * [+1, -1] (SW)
-        * [+1, +1] (SE)
-            S   E
-
-        The local minima are the True entries in the matrix B
-
-        B = (I_R < NW) & (I_R < NE) & (I_R < SW) & (I_R < SE)
-
-        This binary field can then be overplotted on the original
-        (remapped) cutout.
-
-        Side effects
-        ------------
-        self.cube_minima_locs : float, 3D-array
-            The data cube of bit fields for each 8-neighbour comparison.
-            True : pixel location marks local minimum in LoG-filtered frames.
-                This translates to a local maximum in the remapped frames.
-            False : Not a local minimum of the LoG-filtered frames.
-
-        """
-
-        self.cube_minima_locs = np.zeros_like(self.cube_LoG)
-        for i in range(self.cube_LoG.shape[2]):
-            I_res = self.cube_LoG[:, :, i]
-
-            # Create matrix for each offset direction
-            I_cmp = []
-
-            # NW
-            I_1 = np.zeros_like(I_res)
-            I_1[0, 0] = I_res[-1, -1]
-            I_1[0, 1:] = I_res[-1, :-1]
-            I_1[1:, 0] = I_res[:-1, -1]
-            I_1[1:, 1:] = I_res[:-1, :-1]
-
-            # N
-            I_2 = np.zeros_like(I_res)
-            I_2[0, :] = I_res[-1, :]
-            I_2[1:, :] = I_res[:-1, :]
-
-            """..."""
-
-            # W
-            I_4 = np.zeros_like(I_res)
-            I_4[:, 0] = I_res[:, -1]
-            I_4[:, 1:] = I_res[:, :-1]
-
-            # E
-            I_5 = np.zeros_like(I_res)
-            I_5[:, -1] = I_res[:, 0]
-            I_5[:, :-1] = I_res[:, 1:]
-
-            """..."""
-
-            # S
-            I_7 = np.zeros_like(I_res)
-            I_7[-1, :] = I_res[0, :]
-            I_7[:-1, :] = I_res[1:, :]
-
-            """..."""
-
-            # Compare
-            I_min = np.ones_like(I_res).astype(bool)
-            for i in range(len(I_cmp)):
-                I_min &= (I_res <= I_cmp[i])
-
-            # Save into data cube of minima locations
-            self.cube_minima_locs[:, :, i] = I_min
-
-    # def DEPRECATED_compare_neighbours(self):
     def compare_neighbours(self):
         """
-        Eight-neighbour comparison
-
-        For each residual image I_R, create four copies
-        that are shifted, respectively,
-
-            N   W
-        * [-1, -1] (NW)
-        * [-1, +1] (NE)
-        * [+1, -1] (SW)
-        * [+1, +1] (SE)
-            S   E
-
-        The local minima are the True entries in the matrix B
-
-        B = (I_R < NW) & (I_R < NE) & (I_R < SW) & (I_R < SE)
-
-        This binary field can then be overplotted on the original
-        (remapped) cutout.
-
         Side effects
         ------------
         self.cube_minima_locs : float, 3D-array
@@ -1693,52 +1562,17 @@ wcsremap \
             False : Not a local minimum of the LoG-filtered frames.
 
         """
+        self.cube_minima_locs = minloc2Dstack(self.cube_LoG)
 
-        # Parameters for the padding below
-        N_y, N_x = self.cube_remap.shape[:2]
-        pad_y = 2 * N_y
-        pad_x = 2 * N_x
-
-        # Directions for 8-neighbour comparison
-        directions = [
-            (-1, 0), # N
-            (+1, 0), # S
-            (0, +1), # E
-            (0, -1), # W
-
-            (-1, -1), # NW
-            (-1, +1), # NE
-            (+1, -1), # SW
-            (+1, +1)  # SE
-        ]
-
-        self.cube_minima_locs = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.shape[2]):
-            I_res = self.cube_LoG[:, :, i]
-
-            # this may be too expensive for larger cutout sizes,
-            # but I did not have time to fiddle around with indices.
-            # NOTE: np.pad() can not take unicode values for e.g. 'wrap'
-            I_res_3x3 = np.pad(I_res, (pad_y, pad_x), 'wrap')
-
-            # Create matrix for each offset direction
-            I_cmp = [
-                I_res_3x3[
-                    N_y + i: 2 * N_y + i,
-                    N_x + j: 2 * N_x + j
-                ] for (i, j) in directions]
-
-            # Compare
-            I_min = np.ones_like(I_res).astype(bool)
-            for i in range(len(I_cmp)):
-                I_min &= (I_res <= I_cmp[i])
-
-            # Save into data cube of minima locations
-            self.cube_minima_locs[:, :, i] = I_min
-
-    def threshold_intensities(self, tau=.5):
+    def threshold_intensities(self, tau):
         """
         Threshold each image in sequence.
+
+        Taking the logical conjunction with this binary fields marking the
+        local minima of the LoG-filtered image and the original remapped image
+        will result in an image where only the local minima have an intensity.
+        These intensities will then serve in the (non-)detection of a signal
+        given that they are above some defined threshold or not.
 
         Side effects
         ------------
@@ -1751,48 +1585,98 @@ wcsremap \
 
         """
 
-        self.cube_threshold = np.zeros_like(self.cube_remap)
-        for i in range(self.cube_remap.shape[2]):
+        # Generate N_cutouts-long vector of minima and maxima for each image.
+        minima = self.cube_remap.min(axis=0).min(axis=0)
+        maxima = self.cube_remap.max(axis=0).max(axis=0)
 
-            # Best way to threshold?
-            # Initial idea (KSP agreed after discussing it with him)
-            # t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
-            # A better way
-            imin = self.cube_remap[:, :, i].min()
-            imax = self.cube_remap[:, :, i].max()
-            t_cut = tau * (imax - imin)
-            # thresholding i SIP course was done on max(image),
-            # i.e. negative intensities do not influence the positive range of
-            # values used to determine the intensity value of the threshold.
-            # This may introduce a bias for images with negative intensities.
-            # t_cut = tau * (self.cube_remap[:].max())
+        # Best way to threshold?
+        # Initial idea (KSP agreed after discussing it with him)
+        # t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
+        # A better way
 
-            # Get thresholded binary field
+        # Now t_cut is a vector as well
+        t_cut = tau * (maxima - minima)
 
-            # Shortcut
-            img = self.cube_minima_locs[:, :, i]
+        # Keep only entries in the images where a maximum was found
+        cube_only_maxima = (self.cube_minima_locs * self.cube_remap)
 
-            # Keep only entries where maxima were found
-            img *= self.cube_remap[:, :, i]
+        # Subtract the minimum value of each image from these entries,
+        # so that their values lie within the range within which tau
+        # was used to set the cut value for t_cut (<- unclear).
+        cube_only_maxima -= minima[None, None, :]
 
-            # Subtract the minimum value of the complete image
-            img -= imin
+        # Save boolean matrix where True means that a signal was found.
+        self.cube_threshold = (cube_only_maxima > t_cut[None, None, :])
 
-            # Save boolean matrix where True means that a signal was found.
-            self.cube_threshold[:, :, i] = (img > t_cut)
+    @property
+    def sigix(self):
+        """
+        Signal indices
 
-    # def threshold_LoG_values(self, t_cut=-30):
+        Returns
+        -------
+        None : NoneType
+            If `cube_threshold` has not been created, return None instead.
+        V : int, 1D-array
+            Cutout indices for cutouts that have a signal in `cube_threshold`
 
-    #     # USE: LoG intensities
+        """
+        if 'cube_threshold' not in dir(self):
+            return None
+        # Sum cube_threshold along both image axes and return indices of
+        # entries in resulting vector with non-zero sum.
+        return (self.cube_threshold.sum(axis=0).sum(axis=0) > 0).nonzero()[0]
 
-    #     # t_cut = -13.
-    #     t_cut = -30.
+    def report_signals(self):
+        """
+        Create a report of the cutouts in the given instance.
 
-    #     # Get thresholded binary field
-    #     I_min_thres = (cube_LoG[:, :, cut_ix] * I_min) < t_cut
+        """
+        for i in self.sigix:
+            plot_LoG_samples(self, offset=i)
 
-    ## END class Cutout definition --------------------------------------------
+    def __len__(self):
+        return self.files.shape[0]
 
+    def __getitem__(self, key):
+        """
+        Python documentation
+        --------------------
+        Called to implement evaluation of self[key]. For sequence types,
+        the accepted keys should be integers and slice objects. Note
+        that the special interpretation of negative indexes (if the
+        class wishes to emulate a sequence type) is up to the
+        __getitem__() method. If key is of an inappropriate type,
+        TypeError may be raised; if of a value outside the set of
+        indexes for the sequence (after any special interpretation of
+        negative values), IndexError should be raised. For mapping
+        types, if key is missing (not in the container), KeyError should
+        be raised.
+
+        Note: for loops expect that an IndexError will be raised for
+        illegal indexes to allow proper detection of the end of the
+        sequence.
+
+        """
+        return self.cube_remap[key]
+
+    def qix(self, q, which='remap'):
+        _qix = (self.files.quality.values == q)
+        return getattr(self, 'cube_' + which)[:, :, _qix]
+
+    ## END class CutoutSequence definition ------------------------------------
+
+# class Cutout(object):
+#     def __init__(self, slicable):
+#         self._slicable = slicable
+
+#     def __getitem__(self, key):
+#         return self._slicable[key]
+
+#     def __setitem__(self, key, value):
+#         self._slicable[key] = value
+
+#     ## END class Cutout definition --------------------------------------------
 
 def crd2str(radec):
     """Returns a unique string-representation of coordinate"""
@@ -1833,6 +1717,7 @@ def get_covering_fields(radec):
     ix = (RA_geq_ramin & RA_leq_ramax & Dec_geq_decmin & Dec_leq_decmax)
 
     return fields.loc[ix]
+
 
 def fits_get_observation_time(header=None):
     """
@@ -1881,6 +1766,115 @@ def fits_get_observation_time(header=None):
 
     return datetime_observed
 
+
+def LoG2Dstack(stack, sigma):
+
+    from scipy.ndimage import gaussian_laplace as gl
+
+    # For each image in the stack obtain LoG(x, y; sigma)
+    stack_LoG = np.zeros_like(stack)
+    for i in range(stack.shape[2]):
+        stack_LoG[:, :, i] = gl(stack[:, :, i], sigma=sigma)
+
+    return stack_LoG
+
+
+def minloc2Dstack(stack):
+    """
+    Find the local minima in each image of the stack of images (stack) and
+    using eight-neighbour comparison.
+
+    For each image in the stack, find local minima by comparing each pixel
+    intensity with the values of all eight of its neighbours.
+
+    The outer-most 1px-border of the image can not be a local minima (or
+    maxima), since these pixels only have their inward neighbours. To be
+    sure that these are not picked as local minima, the comparison is only
+    made for the part of the image excluding the border pixels.
+
+    The local minima are the True entries in the matrix `stack_minlocs`
+
+    Parameters
+    ----------
+    stack : int or float, 3D-array
+        A stack of 2D images.
+        Stacking order is along the last dimension.
+
+    Returns
+    -------
+    stack_minlocs : bool, 3D-array
+        A stack of 2D binary fields, True where a local minimum was found.
+        Stacking order is along the last dimension.
+
+    """
+    # Directions for 8-neighbour comparison
+    directions = [
+        ((None, -2), (None, -2), (None, None)),   # NW
+        ((None, -2), (1, -1), (None, None)),      # N
+        ((None, -2), (2, None), (None, None)),    # NE
+
+        ((1, -1), (None, -2), (None, None)),      # W
+        ((1, -1), (2, None), (None, None)),       # E
+
+        ((2, None), (None, -2), (None, None)),   # SW
+        ((2, None), (1, -1), (None, None)),      # S
+        ((2, None), (2, None), (None, None)),    # SE
+
+    ]
+    slices = [
+        (slice(*rows), slice(*cols), slice(*cutouts))
+        for (rows, cols, cutouts)
+        in directions
+    ]
+
+    # Slice indices for the centre of the image clipped 1px from each side.
+    self_centre = (slice(1, -1), slice(1, -1), slice(None, None))
+
+    # Indices for the 1px- border around the image
+    borders = [
+        # Top side
+        (0, slice(None, None), slice(None, None)),
+        # Right side
+        (slice(None, None), -1, slice(None, None)),
+        # Bottom side
+        (-1, slice(None, None), slice(None, None)),
+        # Left side
+        (slice(None, None), 0, slice(None, None)),
+    ]
+
+    # Get the clipped images
+    stack_centre = stack[self_centre]
+
+    # Compare neighbours
+    # ------------------
+
+    # Alle entries are set to True to begin with.
+    stack_minlocs = np.ones_like(stack).astype(bool)
+
+    # Clear the border of all the images.
+    for border in borders:
+        stack_minlocs[border] = False
+
+    # For each direction, take the logical conjunction between
+    # the central rows and columns of the cube (the centre of
+    # each image in the stack) and the truth values of the
+    # comparison between values in the image centres and their
+    # neighbours in the direction specified by the slice pairs.
+    #   Having passed all 8 comparisons, the true local minima
+    # are now located at the indices of the True entries.
+    for slice_pair in slices:
+        stack_minlocs[self_centre] &= (stack_centre <= stack[slice_pair])
+    #     print slice_pair
+    #     # for i in range(stack.shape[2]):
+    #     i = 0
+    #     print stack[:, :, i][slice_pair[:2]]
+    #     # print stack_centre[:, :, i]
+    #     print stack_centre[:, :, i] <= stack[:, :, i][slice_pair[:2]]
+    #     print ''
+    # raise SystemExit
+
+    return stack_minlocs
+
 # ---
 
 def write_cutout_sequence_summary(cs):
@@ -1908,8 +1902,8 @@ def write_cutout_sequence_summary(cs):
 
 # ---
 
-# Control programs
-# ----------------
+# Loaders
+# -------
 
 def load_fields():
     return pd.read_csv(env.files.get('fields'), sep=',')
@@ -1934,76 +1928,6 @@ def load_fp2q():
     except:
         print 'There was an error when trying to load', ifname, '...'
         return None
-
-
-def update_tlist(css, targets):
-    """Overwrite the existing tlist (having made the backup)"""
-
-    import shutil
-
-    # First save a copy of the original tlist, if not done already
-    fname_tlist_backup = env.files.get('tlist') \
-                            + '.backup.' + dt.datetime.now().isoformat()
-    shutil.copyfile(env.files.get('tlist'), fname_tlist_backup)
-
-    # Now that it is saved, the possibly changed list can be saved as tlist.
-    # For now it seems easier to just change the original dataframe and save.
-    tlist = load_tlist()
-    for i, (cs, target) in enumerate(zip(css, targets)):
-        Ra, Dec = cs.radec.flatten()
-        tlist.iloc[i]['Ra'] = Ra
-        tlist.iloc[i]['Dec'] = Dec
-        tlist.iloc[i]['is_sn'] = int(target)
-
-    # Write to disk
-    tlist.to_csv(env.files.get('tlist'), index=False, headers=True)
-
-
-def log_tlist_initialise():
-    """
-    Prepare a fresh log file for the latest run of create_cutout_data().
-
-    """
-
-    if os.path.isfile(env.files.get('log_tlist')):
-
-        # Save a copy of the original tlist, if not done already
-
-        import shutil
-
-        fname_backup = env.files.get('log_tlist') \
-                                + '.backup.' + dt.datetime.now().isoformat()
-        shutil.copyfile(env.files.get('log_tlist'), fname_backup)
-
-    columns = [
-        'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
-    ]
-
-    # Save the column names
-    with open(env.files.get('log_tlist'), 'w+') as fsock:
-        fsock.write('{}\n'.format(','.join(columns)))
-
-
-
-def log_tlist_stats(cs=None):
-    if cs is not None:
-
-        if not os.path.isfile(env.files.get('log_tlist')):
-            log_tlist_initialise()
-
-        # Get the information
-        Ra, Dec = cs.radec.flatten()
-        is_sn = int(cs.is_sn)
-        N_fields = cs.fields.shape[0]
-        N_frames = len(cs.frames)
-        N_cutouts = len(cs.cutouts)
-        line = [
-            str(d)
-            for d in (Ra, Dec, is_sn, N_fields, N_frames, N_cutouts)
-        ]
-
-        with open(env.files.get('log_tlist'), 'a') as fsock:
-            fsock.write('{}\n'.format(','.join(line)))
 
 
 def load_all_cutout_sequences():
@@ -2082,26 +2006,79 @@ def load_cutout_sequences():
 
     # print len(coords), np.unique(coords).size
 
-    return np.array(cutout_sequences), np.array(targets)
+    return np.array(cutout_sequences), np.array(targets).astype(bool)
 
 
-class Log(object):
+# Cutout-sequence creation
+# ------------------------
 
-    def __init__(self, fname, sep=','):
-        self.fname = fname
-        self.sep = sep
+def update_tlist(css, targets):
+    """Overwrite the existing tlist (having made the backup)"""
 
-    def _log(self, s):
-        with open(self.fname, 'a') as fsock:
-            fsock.write('{}\n'.format(s))
+    import shutil
 
-    def log(self, s):
-        now = dt.datetime.now().isoformat()
-        self._log('{now}{sep}{s}'.format(
-                now=now, sep=self.sep, s=s))
+    # First save a copy of the original tlist, if not done already
+    fname_tlist_backup = env.files.get('tlist') \
+                            + '.backup.' + dt.datetime.now().isoformat()
+    shutil.copyfile(env.files.get('tlist'), fname_tlist_backup)
 
-    def log_empty(self):
-        self._log('')
+    # Now that it is saved, the possibly changed list can be saved as tlist.
+    # For now it seems easier to just change the original dataframe and save.
+    tlist = load_tlist()
+    for i, (cs, target) in enumerate(zip(css, targets)):
+        Ra, Dec = cs.radec.flatten()
+        tlist.iloc[i]['Ra'] = Ra
+        tlist.iloc[i]['Dec'] = Dec
+        tlist.iloc[i]['is_sn'] = int(target)
+
+    # Write to disk
+    tlist.to_csv(env.files.get('tlist'), index=False, headers=True)
+
+
+def log_tlist_initialise():
+    """
+    Prepare a fresh log file for the latest run of create_cutout_data().
+
+    """
+
+    if os.path.isfile(env.files.get('log_tlist')):
+
+        # Save a copy of the original tlist, if not done already
+
+        import shutil
+
+        fname_backup = env.files.get('log_tlist') \
+                                + '.backup.' + dt.datetime.now().isoformat()
+        shutil.copyfile(env.files.get('log_tlist'), fname_backup)
+
+    columns = [
+        'Ra', 'Dec', 'is_sn', 'N_fields', 'N_frames', 'N_cutouts',
+    ]
+
+    # Save the column names
+    with open(env.files.get('log_tlist'), 'w+') as fsock:
+        fsock.write('{}\n'.format(','.join(columns)))
+
+
+def log_tlist_stats(cs=None):
+    if cs is not None:
+
+        if not os.path.isfile(env.files.get('log_tlist')):
+            log_tlist_initialise()
+
+        # Get the information
+        Ra, Dec = cs.radec.flatten()
+        is_sn = int(cs.is_sn)
+        N_fields = cs.fields.shape[0]
+        N_frames = len(cs.frames)
+        N_cutouts = len(cs.cutouts)
+        line = [
+            str(d)
+            for d in (Ra, Dec, is_sn, N_fields, N_frames, N_cutouts)
+        ]
+
+        with open(env.files.get('log_tlist'), 'a') as fsock:
+            fsock.write('{}\n'.format(','.join(line)))
 
 
 def create_cutout_data():
@@ -2215,196 +2192,12 @@ def create_cutout_data():
     # Save the possibly updated tlist to disk
     update_tlist(css, targets)
 
+"""
+Cutout sequences were made before I employed the quality flag in fields.csv.
 
-def do_grid_search(N_folds=5):
-    """
-    Does N-fold grid search.
-
-    Status
-    ------
-    Testing
-
-    Future
-    ------
-    * Write more of the intermediate data to disk and calculate the accuracies
-      directly from these.
-
-    * Test successfully on server
-    * Test successfully with N-fold (rather than 1-fold) CV
-    * Run successfully with 5-fold CV on the server.
-
-    """
-
-    # Load the data
-    css, targets = load_cutout_sequences()
-
-    # Define chunk sizes
-    # ------------------
-
-    # Create training and test data sets
-    N_css = css.size
-    N_items = N_css / N_folds # Assumes that N_css % N_folds == 0
-    # N_items is the number of samples per chunk
-    # It is therefor also the number of test samples laid aside while training.
-    N_train = N_css - N_items
-
-    # HYPER PARAMETERS
-    # ----------------
-
-    # Define hyper-parameter space
-    N_sigmas = 3
-    N_taus = 5
-
-    # Calculate scales based in pixel radii
-    radii = np.linspace(5, 7, N_sigmas)
-    # sigmas = np.linspace(, N_sigmas)
-    sigmas = radii / np.sqrt(2)
-
-    # Set relative thresholds
-    taus = np.linspace(.50, 1.0, N_taus)
-
-    # 1-fold CV to begin with
-
-    if 1:
-        # Select TEST data data and labels
-        css_test = css[:N_items]
-        targets_test = targets[:N_items]
-
-        # Select TRAINING data data and labels
-        css_train = css[N_items:]
-        targets_train = targets[N_items:]
-
-    else:
-
-        for i in N_folds:
-
-            # CREATE AN ITERATOR GENERATOR?
-
-            left = i * N_items
-            right = i * N_items
-
-            # Select TEST data data and labels
-            css_test = css[:N_items]
-            targets_test = targets[:N_items]
-
-            # Select TRAINING data data and labels
-            css_train = css[N_items:]
-            targets_train = targets[N_items:]
-
-    # Cube of predictions
-    # N_sigmas x N_taus
-    cube_predict = np.zeros((N_sigmas, N_taus, N_train)).astype(bool)
-
-    print '\nNumber of training samples:', N_train
-    print 'Number of test samples:', N_items, '\n'
-
-    """
-    For each cutout sequence in the training set,
-    do grid search and report prediction.
-
-    One slice in the third dimension of cube_predict
-    contains predictions for one cutout sequence.
-
-    """
-
-    msg('Training')
-
-    # Load and setup the data for all the cutouts
-    for k in range(N_train):
-
-        msg('CutoutSequence No. {:d}'.format(k + 1).upper())
-
-        # Select the training data point (the cutout sequence)
-        cs = css_train[k]
-
-        # Load registered frames and get residuals using <bg_model>
-        pad = 10
-        bg = 'median'
-        msg('Loading registered cutouts (pad = {:d}, bg = {})'.format(pad, bg))
-        cs.load(pad=pad, bg_model=bg)
-
-        # Grid search
-        # -----------
-
-        # Sigmas
-        for i in range(N_sigmas):
-            # Blobs
-            # No need to perform LoG every time I change between thresholds
-            sigma = sigmas[i]
-            msg('Sigma: {:.2f}'.format(sigma))
-            msg('LoG')
-            cs.calculate_LoG(sigma=sigma)
-            msg('Neighbours')
-            cs.compare_neighbours()
-
-            # Threshold values
-            for j in range(N_taus):
-
-                tau = taus[j]
-                msg('Tau: {:.2f}'.format(tau))
-
-                cs.threshold_intensities(tau=tau)
-
-                # Save the resulting prediction (a single boolean value)
-                # into the cube of predictions
-                cube_predict[i, j, k] = cs.is_transient()
-
-    # Training accuracy
-    # N_sigmas x N_taus
-    # ^ : XOR
-    accuracies = (
-        (
-            # cube_predict ^ targets_train[None, None, :]
-            cube_predict == targets_train[None, None, :]
-            # Sum along the cutout-sequence axis to
-            # count how many correct guesses (one for each CS)
-            # there were for a given sigma (row) and tau (col)
-        ).sum(axis=2).astype(float) / N_train
-    )
-
-    # Get indices of the maximum
-    ii, jj = np.unravel_index(accuracies.argmax(), (N_sigmas, N_taus))
-
-    max_entries = (accuracies == accuracies[ii, jj])
-    N_max_entries = max_entries.sum()
-    if N_max_entries > 1:
-        msg('More than one best hyper-parameter combination.')
-        print max_entries.nonzero()
-
-    """
-    For the test data, there will be only a vector of predictions,
-    i.e. one for each cutout sequence in the test set.
-
-    The accuracy of this set of predictions is the main
-    result of the 1-fold grid search.
-
-    """
-    sigma_ii = sigmas[ii]
-    tau_jj = taus[jj]
-
-    vec_predict = np.zeros(N_items).astype(bool)
-    for i in range(N_items):
-        cs = css_test[i]
-        cs.load(pad=10, bg_model='median')
-        cs.calculate_LoG(sigma=sigma_ii)
-        cs.compare_neighbours()
-        cs.threshold_intensities(tau=tau_jj)
-        vec_predict[i] = cs.is_transient()
-
-    # Accuracy is a scalar, since we sum over the only dimension
-    # accuracy = (vec_predict ^ targets_test).sum() / N_items
-    accuracy = (vec_predict == targets_test).sum().astype(float) / N_items
-
-    # Save results
-    ofname_training = os.path.join(cs.path('root'), 'accuracies.csv')
-    with open(ofname_training, 'w+') as fsock:
-        for row in accuracies.astype(str):
-            fsock.write(','.join(row) + '\n')
-
-    ofname_test = os.path.join(cs.path('root'), 'accuracy_test')
-    with open(ofname_test, 'w+') as fsock:
-        fsock.write('{}\n'.format(accuracy))
-
+The following two functions make it possible to map the quality of a field
+and the cutout frame that was made from the data for this field.
+"""
 
 def create_cutout_original_to_field_quality_dict():
     """
@@ -2438,7 +2231,7 @@ def create_cutout_original_to_field_quality_dict():
             fp2q[basename] = int(fields.quality[i])
 
         # Make sure that the next output starts on a new line
-        print ''
+        print '\n'
 
         # Save the data
         ykw = dict(default_flow_style=False, explicit_start=True, indent=2)
@@ -2460,6 +2253,7 @@ def create_cutout_original_to_field_quality_dict():
             basename = os.path.basename(filename)
             fnames.append(basename)
             qflags.append(int(fields.quality[i]))
+        print '\n'
 
         df = pd.DataFrame(data=qflags, columns=['quality'], index=fnames)
         df.to_csv(env.files.get('fp2q'), index=True, header=True)
@@ -2495,7 +2289,7 @@ def create_cutout2quality_mapping():
             print ''
 
         # Define output filename for the records
-        ofname = os.path.join(cs.path('coord'), 'cutouts+qualityflags.csv')
+        ofname = os.path.join(cs.path('coord'), 'cutoutsio.csv')
 
         # Get the filenames (to become one column in the DataFrame)
         filenames = cs.get_filenames(path='wcsremap', match='*.fit')
@@ -2514,47 +2308,12 @@ def create_cutout2quality_mapping():
                 continue
             qflags.append(quality)
             fnames.append(fname)
+        print '\n'
 
         # Save the data in `ofname`
-        data = np.array([fnames, qflags]).T
-        columns = ['fname', 'quality']
+        uflags = np.ones_like(qflags).tolist()
+        data = np.array([fnames, qflags, uflags]).T
+        columns = ['fname', 'quality', 'use']
         df = pd.DataFrame(data=data, columns=columns)
         df.to_csv(ofname, index=False, header=True)
-
-
-def main():
-    """
-    Control script for the functions beneath.
-
-    Managagement script to make only the needed steps.
-    Keep a logfile of steps completed?
-    Yes.
-    OR (done)
-    define modes in the CutoutSequence instance which can
-    be checked to see if a given step has been performed.
-      It is not as detailed as a log of every small step, though.
-
-    Basically a dictionary with key = crd2path
-
-    In this dictionary there will be keys named after the function that ran,
-    and it will contain a timestamp and a list of created attributes as strings.
-
-    And then do a complete cleanup, when needed?
-    Yes
-
-    In this way, I can also clean up entire root
-    directories by running through the registration file.
-
-    Should there be a source in this file? E.g. from gxlist or snlist?
-    Yes.
-
-    """
-
-    # plot_covering(co.radec, co.fields_covering, co.path('root'))
-    # plot_possible_cutouts(pxmax=co.pxmax, opath=co.path('root'))
-    # plot_time_coverage(cutout_dates=co.cutout_dates, opath=co.path('dim'))
-    # plot_pixel_indices(co=co)
-    # plot_time_coverage(cutout_dates=co.cutout_dates, opath=co.path('dim'))
-    # write_cutout_summary(co=co)
-    # HTML_create_cutout_display(co.cutout_files, co.path('dim'))
 
