@@ -426,7 +426,7 @@ class CVHelper(object):
         comskw.update(cmap=None)
 
         # Accuracies can only be between 0 and 100 percent
-        imkw.update(vmin=0, vmax=1)
+        # imkw.update(vmin=0, vmax=1)
 
         # Colorbar settings
         cbkw = dict(extend='neither', drawedges=False)
@@ -444,8 +444,9 @@ class CVHelper(object):
             axes.flat[N_folds:])
 
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
-            # im = ax_top.imshow(coa_train[:, :, i], **imkw)
-            ax_top.imshow(coa_train[:, :, i], **imkw)
+            im = ax_top.imshow(coa_train[:, :, i], **imkw)
+            # ax_top.imshow(coa_train[:, :, i], **imkw)
+            fig.colorbar(mappable=im, ax=ax_top, **cbkw)
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
@@ -489,8 +490,9 @@ class CVHelper(object):
             axes.flat[N_folds:])
 
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
-            # im = ax_top.imshow(coa_train[:, :, i], **imkw)
-            ax_top.imshow(coa_test[:, :, i], **imkw)
+            im = ax_top.imshow(coa_test[:, :, i], **imkw)
+            # ax_top.imshow(coa_test[:, :, i], **imkw)
+            fig.colorbar(mappable=im, ax=ax_top, **cbkw)
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
