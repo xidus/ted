@@ -103,14 +103,14 @@ class CVHelper(object):
 
                 # Training set
                 cop = self._cop_any(train_f)
-                moa = self._moa_any(cop, test_f)
-
+                moa = self._moa_any(cop, train_l)
                 self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
 
             except Exception as e:
                 print '_cv_any:', fnum, 'train'
                 print '_cv_any:', train_f.shape, train_l.shape
                 print '_cv_any:', e.message
+                print '_cv_any:', '-' * 50, '\n'
 
             try:
                 # raise Exception
@@ -124,6 +124,7 @@ class CVHelper(object):
                 print '_cv_any:', fnum, 'test'
                 print '_cv_any:', test_f.shape, test_l.shape
                 print '_cv_any:', e.message
+                print '_cv_any:', '-' * 50, '\n'
 
     # Grid search
     # -----------
@@ -238,7 +239,8 @@ class CVHelper(object):
         # fname = self._fn_fstr.format(**self._fn_kw(ftype=ftype, fnum=fnum))
         fname = self._fn_fstr.format(*self._fn_kw(ftype=ftype, fnum=fnum))
         ofname = os.path.join(self._opath, fname)
-        print 'Saving fold results to:', ofname
+        # print 'Saving fold results to:', ofname
+        print 'Saving fold results to:', fname
         # print moa.shape
         df = pd.DataFrame(data=moa, index=self.xp.sigmas, columns=self.xp.taus)
         df.to_csv(ofname, index=True, header=True)
