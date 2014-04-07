@@ -98,14 +98,27 @@ class CVHelper(object):
             fnum = n + 1
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
-            # Training set
-            cop = self._cop_any(train_f)
-            moa = self._moa_any(cop, test_f)
-            self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
-            # Test set
-            cop = self._cop_any(test_f)
-            moa = self._moa_any(cop, test_l)
-            self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
+            try:
+                # Training set
+                cop = self._cop_any(train_f)
+                moa = self._moa_any(cop, test_f)
+                self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
+
+            except Exception as e:
+                print fnum, 'train'
+                print train_f.shape, train_l.shape
+                print e.message
+
+            try:
+                # Test set
+                cop = self._cop_any(test_f)
+                moa = self._moa_any(cop, test_l)
+                self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
+
+            except Exception as e:
+                print fnum, 'test'
+                print test_f.shape, test_l.shape
+                print e.message
 
     # Grid search
     # -----------
