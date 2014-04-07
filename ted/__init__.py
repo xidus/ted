@@ -62,6 +62,8 @@ class TEDError(Exception): pass
 class EnvironmentLoadError(TEDError): pass
 class NoneExistingFileError(TEDError): pass
 
+class Namespace(object): pass
+
 # class TEDRelPath(yaml.YAMLObject, list):
 
 #     yaml_tag = u'!TEDRelPath'
@@ -125,6 +127,10 @@ class Environment(object):
             for env_type_key, env_type_list in doc.get(env_type).items():
                 getattr(self, env_type)[env_type_key] = os.path.join(
                     *env_type_list)
+
+        # Add file params.yaml in the same directory as the environment files.
+        getattr(self, 'files')['params'] = os.path.join(
+            _pkg_home_dir, 'parameters.yaml')
 
         # Add the sql-script directory
         getattr(self, 'paths')['sql'] = os.path.join(_pkg_home_dir, 'sql')
