@@ -139,7 +139,7 @@ class CVHelper(object):
         cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
         for k, cs in enumerate(features):
             # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time + 1800.:
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time + 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction
             else:
                 cs.load(**self._cs)
