@@ -139,7 +139,7 @@ class CVHelper(object):
         cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
         for k, cs in enumerate(features):
             # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time + 2 * 3600.:
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction
             else:
                 cs.load(**self._cs)
@@ -151,8 +151,8 @@ class CVHelper(object):
     def _moa_any(self, cop, labels):
         """Store training accuracies for experiment ANY.
         A.k.a.: matrix of accuracies (moa)."""
-        print cop.shape
-        print labels.shape
+        print 'CoP.shape:', cop.shape
+        print 'Labels.shape:', labels.shape
         return (
             # Broadcast along the parameter axes
             (cop == labels[None, None, :])
