@@ -15,7 +15,7 @@ import os
 # from ... import msg
 # from ... import env
 
-# . : cutouts
+# . : ted.sdss.cutouts
 from . import load_all_cutout_sequences
 
 
@@ -91,6 +91,45 @@ def remove_flags():
         cmd = 'rm {}'.format(path)
         print cmd
         os.system(cmd)
+        with open(ofname, 'a') as fsock:
+            fsock.write('{}\n'.format(fname))
+
+
+def remove_file(filename=None):
+
+    import glob
+
+    # Load all cutout sequences
+    css, targets = load_all_cutout_sequences()
+
+    # /path/to/data/cutouts/101x101
+    base = css[0].path('root')
+    print 'base:', base
+
+    opath = os.path.split(base)[0]
+    oname = os.path.splitext(filename)[0]
+    ofname = os.path.join(opath, 'remove_{}.log'.format(oname))
+
+    with open(ofname, 'a') as fsock:
+        fsock.write('\nNext remove log\n')
+
+    # Get pattern for all the files in the directory `base`
+    iglob = os.path.join(base, '*')
+    print 'iglob', iglob
+
+    # Create full paths to filenames
+    fnames = [
+        os.path.join(path, filename)
+        for path in glob.glob(iglob)
+        if os.path.isdir(path)
+    ]
+    # os.remove raises an exception if files to be removed do not exist.
+    fnames = [fname for fname in fnames if os.path.isfile(fname)]
+
+    for fname in fnames:
+        cmd = 'rm {}'.format(fname)
+        print cmd
+        print os.system(cmd)
         with open(ofname, 'a') as fsock:
             fsock.write('{}\n'.format(fname))
 

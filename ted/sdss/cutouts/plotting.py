@@ -34,19 +34,12 @@ from ..stripe82 import (
     # stripe_width, stripe_height,
     stripe_extent_ra, stripe_extent_dec, w2h
 )
+# from . import load_cutout_sequences
 
 from mplconf import mplrc
 from mplconf import rmath
 
 mplrc('publish_digital')
-
-
-def auto(fun):
-    """A decorator for logging"""
-    def wrapped(*args, **kwargs):
-        fun(self, *args, **kwargs)
-        self.log(step=fun.func_name, status='finished')
-    return wrapped
 
 
 def get_extent(cs):
@@ -280,44 +273,71 @@ def plot_time_coverage(cutout_dates, opath):
 def plot_background_models(cs):
 
     # Set common vmin and vmax
-    vmin = 0.
-    vmax = np.max([cs.template_median.max(), cs.template_mean.max()])
-    # print vmax, np.log10(vmax)
+    # NOTE: I am using Python's built-in functions max and min, since
+    #       NumPy's versions return nan for both np.max and np.min if
+    #       this value is present in the array, whereas max and min
+    #       do what I want in this case: return the minimum and maximum
+    #       of the non-nans in the array.
+    #
+    vmin = min([min(bg_model.flat) for bg_model in cs.bg_models.values()])
+    vmax = max([max(bg_model.flat) for bg_model in cs.bg_models.values()])
 
     # Choose overall colour map
     cmap = mpl.cm.cubehelix
 
     imkw = dict(cmap=cmap, interpolation='nearest')
     imkw.update(aspect='equal')  # , origin='lower')
-    # extent = [0, cutout_size[0] - 1, 0, cutout_size[1] - 1]
-    imkw.update(extent=extent)
+    imkw.update(extent=get_extent(cs))
 
     cbkw = dict(extend='neither', drawedges=False)
     cbkw.update(pad=.005, orientation='horizontal')
 
     fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(15., 5.))
 
-    imkw.update(vmin=vmin, vmax=np.log10(vmax))
-    im1 = ax1.imshow(np.log10(cs.template_median), **imkw)
-    im2 = ax2.imshow(np.log10(cs.template_mean), **imkw)
+    imkw.update(vmin=np.log10(vmin), vmax=np.log10(vmax))
+    im1 = ax1.imshow(np.log10(cs.bg_models.get('median')), **imkw)
+    im2 = ax2.imshow(np.log10(cs.bg_models.get('mean')), **imkw)
     ax1.set_title(rmath('Log10(Median)'))
     ax2.set_title(rmath('Log10(Mean)'))
 
     imkw.update(vmin=vmin, vmax=vmax)
-    im3 = ax3.imshow(cs.template_median, **imkw)
-    im4 = ax4.imshow(cs.template_mean, **imkw)
+    im3 = ax3.imshow(cs.bg_models.get('median'), **imkw)
+    im4 = ax4.imshow(cs.bg_models.get('mean'), **imkw)
     ax3.set_title(rmath('Median'))
     ax4.set_title(rmath('Mean'))
 
+    # print np.log10(cs.bg_models.get('median')).flatten()[:10]
+    # print cs.bg_models.get('median').flatten()[:10]
+
+    tick_locator = mpl.ticker.MaxNLocator(nbins=5)
+    auto_locator = mpl.ticker.AutoLocator()
     for ax, im in zip((ax1, ax2, ax3, ax4), (im1, im2, im3, im4)):
         ax.set_axis_off()
-        # cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
-        fig.colorbar(mappable=im, ax=ax, **cbkw)
+        cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
+        cbar.locator = tick_locator
+        cbar.ax.xaxis.set_major_locator(auto_locator)
+        cbar.update_ticks()
+
+    # for ax, im in zip((ax1, ax2), (im1, im2)):
+    #     # cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
+    #     fig.colorbar(mappable=im, ax=ax, **cbkw)
+
+    # for ax, im in zip((ax3, ax4), (im3, im4)):
+    #     # cbar = fig.colorbar(mappable=im, ax=ax, **cbkw)
+    #     fig.colorbar(mappable=im, ax=ax, ticks=cticks, **cbkw)
 
     fig.tight_layout()
-    plt.savefig(os.path.join(cs.path('coord'), 'background_templates.pdf'))
+    plt.savefig(os.path.join(cs.path('coord'), 'bg_models.pdf'))
 
     plt.close(fig)
+
+
+def check_offset(cs, offset=0):
+    # ASSUMPTION: there are enough (MIN_NUMBER_OF_CUTOUTS) cutouts in
+    # the sequence that offset will not be changed by both these lines.
+    offset = max(offset - 2, 0)
+    offset = min(offset, cs.cube_remap.shape[2] - 4)
+    return offset
 
 
 def plot_residual_samples(cs, offset=0):
@@ -332,12 +352,15 @@ def plot_residual_samples(cs, offset=0):
 
     """
 
-    # Use mask when plotting residuals
-    # cube_res = np.ma.masked_where(cutout_mask_3D, cube_residual)
-    cube_res = cs.cube_residual
+    # Handle input
+    offset = check_offset(cs, offset=offset)
+    fname = 'residuals_offset-{:d}.pdf'.format(offset)
+    ofname_check_residual = os.path.join(cs.path('results'), fname)
 
-    vmin = cube_res[:, :, offset:offset + 4].min()
-    vmax = cube_res[:, :, offset:offset + 4].max()
+    cube = cs.cube_residual
+
+    vmin = cube[:, :, offset:offset + 4].min()
+    vmax = cube[:, :, offset:offset + 4].max()
     # print vmin, vmax
 
     # cmap = mpl.cm.bone
@@ -347,25 +370,21 @@ def plot_residual_samples(cs, offset=0):
     imkw.update(aspect='equal')  # , origin='lower')
     imkw.update(vmin=vmin, vmax=vmax)
 
-    fig, axes = plt.subplots(1, 4, figsize=(15., 5.))
-
     cbkw = dict(extend='neither', drawedges=False)
     cbkw.update(pad=.005, orientation='horizontal')
 
+    fig, axes = plt.subplots(1, 4, figsize=(15., 5.))
+
     for i in range(4):
         index = offset + i
-        im = axes[i].imshow(cube_res[:, :, index], **imkw)
-        axes[i].set_title('cube_res[:, :, {}]'.format(index))
+        im = axes[i].imshow(cube[:, :, index], **imkw)
+        axes[i].set_title('cube[:, :, {}]'.format(index))
         axes[i].set_axis_off()
         # cbar = fig.colorbar(mappable=im, ax=axes[i], **cbkw)
         fig.colorbar(mappable=im, ax=axes[i], **cbkw)
 
     fig.tight_layout()
-
-    ofname_check_residual = os.path.join(
-        cs.path('results'), 'check_residual.pdf')
     plt.savefig(ofname_check_residual)
-
     plt.close(fig)
 
 
@@ -374,28 +393,24 @@ def plot_LoG_samples(cs, offset=0):
     Plot a couple of LoG-filtered images to check if filter size is
     reasonable (clear spot when SN present)
 
-    # Offset to start from
-    # Use it to see the change between SN present and not
+    Offset to start from
+    Use it to see the change between SN present and not
+
     """
+
+    # Handle input
+    offset = check_offset(cs, offset=offset)
+    fname = 'LoG_samples_offset-{:d}.pdf'.format(offset)
+    ofname = os.path.join(cs.path('results'), fname)
 
     # Also plot them as 3D surfaces to get a better feel for the toplogy
     # of the the LoG-filtered difference images
     from mpl_toolkits.mplot3d import axes3d
 
-    # Mask reference cube
-    #cube_ref = np.ma.masked_where(cutout_mask_3D, cube_LoG)
-    cube_ref = cs.cube_LoG
+    cube = cs.cube_LoG
 
-    # Use log-scale?
-    if 0:
-        cube_ref = np.log10(cube_ref)
-        title_fstr = 'Log10(cube_LoG[:, :, {}])'
-
-    else:
-        title_fstr = 'cube_LoG[:, :, {}]'
-
-    vmin = cube_ref[:, :, offset:offset + 4].min()
-    vmax = cube_ref[:, :, offset:offset + 4].max()
+    vmin = cube[:, :, offset:offset + 4].min()
+    vmax = cube[:, :, offset:offset + 4].max()
     print 'vmin = {:.2f}\nvmax = {:.2f}'.format(vmin, vmax)
 
     cmap = mpl.cm.cubehelix
@@ -426,21 +441,20 @@ def plot_LoG_samples(cs, offset=0):
 
         index = offset + i
         j = i + 4
-
-        print i, j
+        # print i, j
 
         axi = fig.add_subplot(241 + i)
         axj = fig.add_subplot(241 + j, projection='3d')
 
         # In the top row
-        im = axi.imshow(cube_ref[:, :, index], **imkw)
-        axi.set_title(title_fstr.format(index))
+        im = axi.imshow(cube[:, :, index], **imkw)
+        axi.set_title('cube_LoG[:, :, {}]'.format(index))
         axi.set_axis_off()
         # cbar = fig.colorbar(mappable=im, ax=axi, **cbkw)
         fig.colorbar(mappable=im, ax=axi, **cbkw)
 
         # In the bottom row
-        Z = cube_ref[:, :, index]
+        Z = cube[:, :, index]
         # axj.plot_wireframe(X, Y, Z, **axkw)
         # surf = axj.plot_surface(X, Y, Z,  **axkw)
         axj.plot_surface(X, Y, Z,  **axkw)
@@ -448,27 +462,38 @@ def plot_LoG_samples(cs, offset=0):
         axj.set_zlim(vmin, vmax)
 
     fig.tight_layout()
-
-    ofname_check_LoG = os.path.join(cs.path('results'), 'check_LoG.pdf')
-    plt.savefig(ofname_check_LoG)
-
+    plt.savefig(ofname)
     plt.close(fig)
+
+
+def plot_unclipped_cutouts(cs):
+    pass
 
 
 def plot_binary_fields(cs):
     """
     Plot and save image of each binary field.
 
+    Dependencies
+    ------------
+    cs.cube_minima_locs
+    cs.cube_threshold
+    tau : float
+        relative threshold value
+    quality : int, list
+        list of qualities
+
     Needs
     -----
-
     I_min was one instance, change to others.
 
     """
 
+    fname = 'check_minima.pdf'
+    ofname_check_minima = os.path.join(cs.path('results'), fname)
+
     cmap = mpl.cm.binary
 
-    # extent = [0, 80, 0, 80]
     imkw = dict(cmap=cmap, interpolation='nearest')
     imkw.update(aspect='equal')  # , origin='lower')
     imkw.update(extent=get_extent(cs))
@@ -486,13 +511,44 @@ def plot_binary_fields(cs):
     ax2.plot([40], [40], **pkw)
     ax2.set_title(rmath('Minima (intensity > threshold)'))
 
-    # for ax in (ax1, ax2):
-    #     ax.plot(padx, pady, c=mpl.rcParams.get('axes.color_cycle')[0])
+    fig.tight_layout()
+    plt.savefig(ofname_check_minima)
+    plt.close(fig)
 
+
+def plot_histogram_cutouts(cs):
+    """
+    For every cutout in cutout sequence
+
+    Needs
+    -----
+
+    I_min was one instance, change to others.
+
+    """
+
+    # Where are the True entries?
+    y_ix, x_ix = I_min.nonzero()
+
+    # The intensities of the LoG-minima
+    cube_masked = cube_remap[y_ix, x_ix, cut_ix]
+
+    # Indices of intensities that are larger than zero.
+    cix = cube_masked > 0
+
+    # Histogram of pixel values for the original remapped image
+    # pkw.update(c=mpl.rcParams.get('axes.color_cycle')[1])
+    fig, ax = plt.subplots(1, 1, figsize=(15., 4.))
+    h = ax.hist(cube_masked[cix], bins=50)
+    # ax.set_yscale('log')
+    ax.set_xlabel(rmath('Intensity'))
+    ax.set_ylabel(rmath('Count'))
+    ax.set_title(rmath('Pixel intensities from remapped frame'))
     fig.tight_layout()
 
-    ofname_check_minima = os.path.join(cs.path('results'), 'check_minima.pdf')
-    plt.savefig(ofname_check_minima)
+    ofname_check_intensities = os.path.join(
+        cs.path('results'), 'check_intensities_remap.pdf')
+    plt.savefig(ofname_check_intensities)
 
     plt.close(fig)
 
@@ -597,4 +653,16 @@ def plot_histogram_ranked_LoG(cs):
         plt.savefig(ofname_check_intensities)
 
         plt.close(fig)
+
+
+# def illustrate_cutout_sequences():
+
+#     # Load all cutout sequences in tlist.
+#     css, targets = load_cutout_sequences()
+
+#     for cs in css:
+#         plot_background_models(cs)
+#         plot_residual_samples(cs)
+#         plot_LoG_samples(cs)
+#         plot_binary_fields(cs)
 
