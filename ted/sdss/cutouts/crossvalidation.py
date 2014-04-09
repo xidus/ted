@@ -151,6 +151,7 @@ class CVHelper(object):
         N = features.shape[0]
         cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
         for k, cs in enumerate(features):
+            cs.set_fname_gsp('prediction_Q-{}.csv'.format(self._qstr))
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
             # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction

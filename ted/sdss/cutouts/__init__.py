@@ -1522,9 +1522,10 @@ wcsremap \
 
     @property
     def _fname_gsp(self):
-        return os.path.join(
-            self.path('results'), 'prediction_{}.csv'.format(
-                ''.join([str(q) for q in sorted(self.quality)])))
+        return self._fname_gs_prediction
+
+    def set_fname_gsp(self, fname):
+        self._fname_gs_prediction = os.path.join(self.path('results'), fname)
 
     @property
     def has_gs_prediction(self):
