@@ -9,15 +9,27 @@ Test module.
 
 """
 
-import unittest
+# import unittest
 
 
-class EnvironmentSetupTest(unittest.TestCase):
-    """"""
+# class EnvironmentSetupTest(unittest.TestCase):
+#     """"""
 
-    def test_path(self):
-        assert 'path' in locals(), 'Environment settings not found.'
+#     def test_path(self):
+#         assert 'path' in locals(), 'Environment settings not found.'
 
 
-if __name__ == '__main__':
-    unittest.main()
+# if __name__ == '__main__':
+#     unittest.main()
+
+
+# def test_LoG2Dstack():
+
+#     import numpy as np
+
+#     from ted.sdss.cutouts import LoG2Dstack
+
+#     cube = np.arange(300).reshape((10, 10, 3))
+#     sigma = 3
+#     cube_LoG = LoG2Dstack(cube, sigma)
+
