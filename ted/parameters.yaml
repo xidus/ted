@@ -19,8 +19,8 @@ cs:
   # Can also be set directly
   # Type :: list
   # Options :: [1, 2, 3]
-  # quality: [1, 2, 3]
-  quality: [3]
+  quality: [1, 2, 3]
+  # quality: [3]
 
   # How much of the border of the frames to clip?
   # Type :: int
