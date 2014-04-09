@@ -1897,7 +1897,7 @@ def threshold2Dstack(stack, stack_locs, tau):
     # Keep only entries in the stack images where a location was specified.
     stack_maxima_only = (stack_locs * stack)
 
-    if 0:
+    if 1:
 
         """Base maxima and minima values on the whole image."""
 
