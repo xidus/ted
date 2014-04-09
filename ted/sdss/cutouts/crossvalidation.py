@@ -437,7 +437,7 @@ class CVHelper(object):
         moaskw = imkw.copy()
         moaskw.update(cmap=mpl.cm.coolwarm)
         # Accuracies can only be between 0 and 100 percent
-        # moaskw.update(vmin=0, vmax=1)
+        moaskw.update(vmin=0, vmax=1)
 
         # Image settings for matrices of maximum-accuracy indices
         momaskw = imkw.copy()
