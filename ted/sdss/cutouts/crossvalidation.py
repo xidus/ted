@@ -236,14 +236,14 @@ class CVHelper(object):
     @property
     def _fn_fstr(self):
         # return 'moa_{ft}_E-{xp}_CV-{N}-{n}_BG-{bg}_Q-{qstr}.csv'
-        return 'moa_{}_E-{}_Q-{}_CV-{}-{}_BG-{}.csv'
+        return 'moa_E-{}_Q-{}_{}_CV-{}-{}_BG-{}.csv'
 
     def _fn_kw(self, ftype, fnum):
         """Return current state (self._fold)"""
         return (
-            ftype,
             self.xp.name,
             self._qstr(self.quality),
+            ftype,
             self._cv.get('N_folds'),
             fnum,
             self._cs.get('bg_model'),
@@ -270,9 +270,9 @@ class CVHelper(object):
         import itertools as it
         N = self._cv.get('N_folds')
         args = (
-            [ftype],
             [self.xp.name],
             [self._qstr(self.quality)],
+            [ftype],
             [N],
             range(1, N + 1),
             ['median'],
