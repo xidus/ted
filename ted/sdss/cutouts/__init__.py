@@ -1484,7 +1484,7 @@ wcsremap \
         self.calculate_LoG(sigma=sigma)
         self.compare_neighbours()
         self.threshold_intensities(tau=tau)
-        return np.any(self.cube_threshold.ravel())
+        return np.any(self.cube_threshold)
 
     def gridsearch(self, exp='any', **params):
         """Run grid search for given experiment"""
@@ -1507,7 +1507,7 @@ wcsremap \
             for j, tau in enumerate(taus):
                 self.threshold_intensities(tau=tau)
                 # Save the resulting prediction (bool)
-                predictions[i, j] = np.any(self.cube_threshold.ravel())
+                predictions[i, j] = np.any(self.cube_threshold)
 
         # Save copy on disk
         df = pd.DataFrame(data=predictions)
@@ -1574,6 +1574,12 @@ wcsremap \
         These intensities will then serve in the (non-)detection of a signal
         given that they are above some defined threshold or not.
 
+        Uses
+        ----
+        self.cube_remap
+        self.cube_minima_locs
+
+
         Side effects
         ------------
         self.cube_threshold : float, 3D-array
@@ -1583,30 +1589,12 @@ wcsremap \
                 larger than the background. (Does it mean this?)
             False : Value was not larger than threshold.
 
+            In other words:
+                A boolean matrix where True means that a signal was found.
+
         """
-
-        # Generate N_cutouts-long vector of minima and maxima for each image.
-        minima = self.cube_remap.min(axis=0).min(axis=0)
-        maxima = self.cube_remap.max(axis=0).max(axis=0)
-
-        # Best way to threshold?
-        # Initial idea (KSP agreed after discussing it with him)
-        # t_cut = tau * (self.cube_remap[:].max() - self.cube_remap[:].min())
-        # A better way
-
-        # Now t_cut is a vector as well
-        t_cut = tau * (maxima - minima)
-
-        # Keep only entries in the images where a maximum was found
-        cube_only_maxima = (self.cube_minima_locs * self.cube_remap)
-
-        # Subtract the minimum value of each image from these entries,
-        # so that their values lie within the range within which tau
-        # was used to set the cut value for t_cut (<- unclear).
-        cube_only_maxima -= minima[None, None, :]
-
-        # Save boolean matrix where True means that a signal was found.
-        self.cube_threshold = (cube_only_maxima > t_cut[None, None, :])
+        self.cube_threshold = threshold2Dstack(
+            stack=self.cube_remap, stack_locs=self.cube_minima_locs, tau=tau)
 
     @property
     def sigix(self):
@@ -1874,6 +1862,69 @@ def minloc2Dstack(stack):
     # raise SystemExit
 
     return stack_minlocs
+
+def threshold2Dstack(stack, stack_locs, tau):
+    """
+    Threshold image stack.
+
+    Method
+    ------
+    * For each image in the stack, get its maximum and minimum.
+    * For each maximum and minimum, use relative threshold `tau` to calculate
+      the absolute threshold based on the entire range of intensities.
+
+        absolute_threshold = relative_threshold * (max - min)
+
+    * Threshold intensities at given index locations.
+    * Return stack of binary images, where True entries mark the indices for
+      which the original intensity of the image was larger than the absolute
+      threshold for that image.
+
+    Notes
+    -----
+    Best way to threshold?
+    Initial idea (KSP agreed after discussing it with him)
+    t_cut = tau * (stack[:].max() - stack[:].min())
+    A better way
+
+    """
+
+    # Keep only entries in the stack images where a location was specified.
+    stack_maxima_only = (stack_locs * stack)
+
+    if 0:
+
+        """Base maxima and minima values on the whole image."""
+
+        # Generate <N stack depth> long vector
+        # of minima and maxima for each image.
+        minima = stack.min(axis=0).min(axis=0)
+        maxima = stack.max(axis=0).max(axis=0)
+
+        # Now t_cut is a vector as well
+        t_cut = tau * (maxima - minima)
+
+    else:
+
+        """Base maxima and minima values on specified locations only."""
+
+        # Generate <N stack depth> long vector
+        # of minima and maxima for each image.
+        minima = stack_maxima_only.min(axis=0).min(axis=0)
+        maxima = stack_maxima_only.max(axis=0).max(axis=0)
+
+        # Now t_cut is a vector as well
+        t_cut = tau * (maxima - minima)
+
+    # Subtract the minimum value of each image from these entries,
+    # so that their values lie within the range within which tau
+    # was used to set the cut value for t_cut (<- unclear).
+    stack_maxima_only -= minima[None, None, :]
+
+    # Return boolean matrix where True means that a signal was found.
+    return (stack_maxima_only > t_cut[None, None, :])
+
+
 
 # ---
 

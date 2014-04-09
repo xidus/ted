@@ -358,7 +358,7 @@ class CVHelper(object):
             momas_test[:, :, i] = max_locs(coa_test[:, :, i])
 
         # Calculate the locations of the assumed best accuracies
-        # This is the centre-of-mass/centroids for each set of
+        # This is the centre-of-mass/centroid for each set of
         # entries with the maximum value.
 
         # List of centroids for the best accuracy
@@ -408,35 +408,41 @@ class CVHelper(object):
         # Plot settings
         # -------------
 
-        mplrc('publish_digital')
+        # mplrc('publish_digital')
+        mplrc('publish_printed')
 
         # Extent
+        # With the bottom is sigmas.min(), imshow must have origin='lower'
         extent = [taus.min(), taus.max(), sigmas.min(), sigmas.max()]
 
-        # Image settings for the accuracies
-        imkw = dict(origin='lower', aspect='auto')
-        imkw.update(extent=extent, interpolation='nearest')
+        # GENERIC image settings
+        imkw = dict(origin='lower', aspect='auto', interpolation='nearest')
+        imkw.update(extent=extent)
 
-        # Image settings for matrices of maximum accuracies
+        # Image settings for matrices of accuracies
+        moaskw = imkw.copy()
+        moaskw.update(cmap=mpl.cm.coolwarm)
+        # Accuracies can only be between 0 and 100 percent
+        # moaskw.update(vmin=0, vmax=1)
+
+        # Image settings for matrices of maximum-accuracy indices
         momaskw = imkw.copy()
-        momaskw.update(cmap=mpl.cm.binary_r, alpha=.8)
+        momaskw.update(cmap=mpl.cm.binary)
 
-        # Image settings for centre-of-mass matrices
+        # Image settings for matrices of centre-of-mass index
         comskw = imkw.copy()
         comskw.update(cmap=None)
-
-        # Accuracies can only be between 0 and 100 percent
-        # imkw.update(vmin=0, vmax=1)
 
         # Colorbar settings
         cbkw = dict(extend='neither', drawedges=False)
         cbkw.update(orientation='horizontal')
-        cbkw.update(pad=.1)
+        cbkw.update(pad=.1, ticks=[.0, .5, 1.])
 
         # Plot accuracies for each training fold overplotted with the best-accuracy positions.
         # -----
 
-        fkw = dict(sharex=True, sharey=True, figsize=(15, 6))
+        fkw = dict(sharex=True, sharey=True, figsize=(15, 6.5))
+        # fkw = dict(figsize=(15, 6.5))
         fig, axes = plt.subplots(2, N_folds, **fkw)
 
         iter_axes = zip(
@@ -444,9 +450,9 @@ class CVHelper(object):
             axes.flat[N_folds:])
 
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
-            im = ax_top.imshow(coa_train[:, :, i], **imkw)
-            # ax_top.imshow(coa_train[:, :, i], **imkw)
-            fig.colorbar(mappable=im, ax=ax_top, **cbkw)
+            # ax_top.imshow(coa_train[:, :, i], **moaskw)
+            im = ax_top.imshow(coa_train[:, :, i], **moaskw)
+            cbar = fig.colorbar(mappable=im, ax=ax_top, **cbkw)
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
@@ -482,7 +488,6 @@ class CVHelper(object):
         # Plot accuracies for each test fold overplotted with the best-accuracy positions.
         # -----
 
-        fkw = dict(sharex=True, sharey=True, figsize=(15, 6))
         fig, axes = plt.subplots(2, N_folds, **fkw)
 
         iter_axes = zip(
@@ -490,9 +495,10 @@ class CVHelper(object):
             axes.flat[N_folds:])
 
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
-            im = ax_top.imshow(coa_test[:, :, i], **imkw)
-            # ax_top.imshow(coa_test[:, :, i], **imkw)
-            fig.colorbar(mappable=im, ax=ax_top, **cbkw)
+            im = ax_top.imshow(coa_test[:, :, i], **moaskw)
+            # ax_top.imshow(coa_test[:, :, i], **moaskw)
+            cbar = fig.colorbar(mappable=im, ax=ax_top, **cbkw)
+            # cbar.set_ticks([.0, .5, 1.])
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
@@ -534,7 +540,7 @@ class CVHelper(object):
         X, Y = np.mgrid[0:1:N_sigmas * 1j, 0:1:N_taus * 1j]
         positions = np.vstack([X.ravel(), Y.ravel()])
         Z = np.reshape(kernel_train(positions).T, X.shape)
-        ax1.imshow(np.rot90(Z), **imkw)
+        ax1.imshow(np.rot90(Z), **moaskw)
 
         # Rest of the plot setup
         ax1.set_ylabel(r'$\sigma$')
@@ -575,18 +581,18 @@ def max_locs(arr):
     Get boolean array where True means
     entry value was same as maximum value.
     """
-    return (arr == arr.flatten().max())
+    return (arr == arr.max())
 
 
 def centroid(indices_list):
-    print 'Indices:'
+    # print 'Indices:'
     centroid = []
     for indices in indices_list:
-        print indices
+        # print indices
         centroid.append(np.round(np.mean(indices)))
-    print ''
+    # print ''
     print 'Centroid:', centroid
-    print ''
+    # print ''
 
     return centroid
 
