@@ -328,6 +328,9 @@ class CutoutSequence(object):
         # Set qualities to load into memory
         self.set_load_quality(quality)
 
+        # Set the quality to use to the same as the load quality.
+        self.set_quality(quality=self.load_quality)
+
         # Load data into memory
         self.load_registered_cutouts()
 
@@ -351,6 +354,7 @@ class CutoutSequence(object):
     def set_quality(self, quality):
         """Set the quality to use for the analysis"""
         self._check_quality(quality)
+        print 'Setting quality to use:', quality
         self.quality = quality
 
     @property
@@ -1380,10 +1384,7 @@ wcsremap \
 
             # Attach `files` to the instance
             self._files = files
-            self._qualities = files.quality.values
-
-            # Set the quality to use to the same as the load quality.
-            self.set_quality(quality=self.load_quality)
+            # self._qualities = files.quality.values
 
             # Calibrate the data used for the subsequent analysis
             self.calibrate()
@@ -1407,19 +1408,23 @@ wcsremap \
         if quality is None:
             quality = self.quality
 
+        msg('C A L I B R A T I O N :: quality == {}'.format(quality))
+        # raise SystemExit
+
         if clip is None:
             clip = self.clip
 
-        # Get indices for the data
+        # Get indices for the data based on the list of files with load_quality
         qix = np.zeros(self._files.shape[0]).astype(bool)
         for q in self.quality:
             # Add if chosen
             qix |= (self._files.quality == q)
-        qix = qix
 
         # Save the stuff that is used in the analysis
         self.cube_remap = self.get_view(self._cube_remap[:, :, qix], clip=clip)
         self.files = self._files.iloc[qix]
+        print 'self._files.shape[0] =', self._files.shape[0]
+        print 'self.files.shape[0] =', self.files.shape[0]
 
     def get_view(self, data_cube, clip=0):
         """Creates a clipped view into the data cube."""
