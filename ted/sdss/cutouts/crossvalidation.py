@@ -63,7 +63,21 @@ class CVHelper(object):
         xp.N_taus = xp.taus.size
         xp.gskw = dict(exp=xp.name, **xpp)
         self.xp = xp
-        # self.test()
+
+    @property
+    def quality(self):
+        if not hasattr(self, '_quality'):
+            return self._cs.get('quality')
+        else:
+            return self._quality
+
+    def set_quality(self, quality):
+        if isinstance(quality, list):
+            self._quality = quality
+
+    @staticmethod
+    def _qstr(quality):
+        return ''.join([str(q) for q in sorted(quality)])
 
     # Fold management
     # ---------------
@@ -108,7 +122,6 @@ class CVHelper(object):
 
             except Exception as e:
                 print '_cv_any:', fnum, 'train'
-                print '_cv_any:', train_f.shape, train_l.shape
                 print '_cv_any:', e.message
                 print '_cv_any:', '-' * 50, '\n'
 
@@ -122,7 +135,6 @@ class CVHelper(object):
 
             except Exception as e:
                 print '_cv_any:', fnum, 'test'
-                print '_cv_any:', test_f.shape, test_l.shape
                 print '_cv_any:', e.message
                 print '_cv_any:', '-' * 50, '\n'
 
@@ -139,11 +151,17 @@ class CVHelper(object):
         N = features.shape[0]
         cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
         for k, cs in enumerate(features):
-            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction
             else:
                 cs.load(**self._cs)
+                # print 'cs.quality:', cs.quality
+                cs.set_quality(self.quality)
+                # print 'cs.quality:', cs.quality
+                cs.calibrate()
+                # print 'cs.quality:', cs.quality
+                # raise SystemExit
                 cs.calculate_residuals()
                 cop[:, :, k] = cs.gridsearch(**self.xp.gskw)
                 cs.cleanup()
@@ -174,6 +192,8 @@ class CVHelper(object):
         vop = np.zeros(features.shape[0]).astype(bool)
         for i, cs in enumerate(features):
             cs.load(**self._cs)
+            cs.set_quality(self.quality)
+            cs.calibrate()
             cs.calculate_residuals()
             vop[i] = cs.predict(**self._parkw)
             cs.cleanup()
@@ -216,24 +236,18 @@ class CVHelper(object):
     @property
     def _fn_fstr(self):
         # return 'moa_{ft}_E-{xp}_CV-{N}-{n}_BG-{bg}_Q-{qstr}.csv'
-        return 'moa_{}_E-{}_CV-{}-{}_BG-{}_Q-{}.csv'
+        return 'moa_{}_E-{}_Q-{}_CV-{}-{}_BG-{}.csv'
 
     def _fn_kw(self, ftype, fnum):
         """Return current state (self._fold)"""
         return (
             ftype,
             self.xp.name,
+            self._qstr(self.quality),
             self._cv.get('N_folds'),
             fnum,
             self._cs.get('bg_model'),
-            # The quality used for now
-            # is just the same as the one used for loading the cutouts.
-            self._qstr(self._cs.get('quality')),
         )
-
-    @staticmethod
-    def _qstr(quality):
-        return ''.join([str(q) for q in sorted(quality)])
 
     def _save_fold_results(self):
         getattr(self, '_save_fold_results_' + self.xp.name)()
@@ -258,10 +272,10 @@ class CVHelper(object):
         args = (
             [ftype],
             [self.xp.name],
+            [self._qstr(self.quality)],
             [N],
             range(1, N + 1),
             ['median'],
-            [self._qstr(self._cs.get('quality'))]
         )
         for t in it.product(*args, repeat=1):
             ifname = os.path.join(self._opath, self._fn_fstr.format(*t))
@@ -478,7 +492,7 @@ class CVHelper(object):
         # fig.colorbar(mappable=im, ax=ax, **cbkw)
 
         fig.tight_layout()
-        qstr = self._qstr(self._cs.get('quality'))
+        qstr = self._qstr(self.quality)
         fname = 'moa_train_folds+best_Q-{}.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
@@ -706,25 +720,35 @@ def LoG_radius2sigma(radius):
         raise TypeError('`radius` is neither array-like or a number.')
 
 
-def cv(exp='any'):  # , quality_combinations=[]):
+def cv(exp='any', quality=None):
     """Perform N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
     cvh.set_exp('any')
+    if quality is not None:
+        cvh.set_quality(quality)
+        print 'Setting quality to', quality
+        print 'Check:', cvh.quality
     cvh.cv()
 
 
-def analyse(exp='any'):  # , quality_combinations=[]):
+def analyse(exp='any', quality=None):
     """Analyse results of N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
     cvh.set_exp('any')
+    if quality is not None:
+        cvh.set_quality(quality)
+        print 'Setting quality to', quality
+        print 'Check:', cvh.quality
     cvh.analyse()
-    # cvh.plot()
 
 
-def plot(exp='any'):  # , quality_combinations=[]):
+def plot(exp='any', quality=None):
     """Plot results of N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
     cvh.set_exp('any')
+    if quality is not None:
+        cvh.set_quality(quality)
+        print 'Setting quality to', quality
+        print 'Check:', cvh.quality
     cvh.plot()
-
 
