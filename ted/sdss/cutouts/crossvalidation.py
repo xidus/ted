@@ -428,7 +428,9 @@ class CVHelper(object):
 
         # Extent
         # With the bottom is sigmas.min(), imshow must have origin='lower'
-        extent = [taus.min(), taus.max(), sigmas.min(), sigmas.max()]
+        tmin, tmax, dtau = taus.min(), taus.max(), taus[1] - taus[0]
+        smin, smax, dsig = sigmas.min(), sigmas.max(), sigmas[1] - sigmas[0]
+        extent = [(tmin - dtau), (tmax + dtau), (smin - dsig), (smax + dsig)]
 
         # GENERIC image settings
         imkw = dict(origin='lower', aspect='auto', interpolation='nearest')
