@@ -276,7 +276,7 @@ class CVHelper(object):
             [ftype],
             [N],
             range(1, N + 1),
-            ['median'],
+            [self._cs.get('bg_model')],
         )
         for t in it.product(*args, repeat=1):
             ifname = os.path.join(self._opath, self._fn_fstr.format(*t))
@@ -539,7 +539,7 @@ class CVHelper(object):
         # fig.colorbar(mappable=im, ax=ax, **cbkw)
 
         fig.tight_layout()
-        fname = 'moa_Q-{}_test_folds+best_Q-{}.pdf'.format(qstr)
+        fname = 'moa_Q-{}_test_folds+best.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
 
