@@ -319,7 +319,7 @@ class CVHelper(object):
         import matplotlib.pyplot as plt
 
         from mplconf import mplrc
-        # from mplconf import rmath
+        from mplconf import rmath
 
         # Load data
 
@@ -332,6 +332,10 @@ class CVHelper(object):
         # Get CV information
 
         N_folds = self._cv.get('N_folds')
+
+        # Get experiment information
+
+        qstr = self._qstr(self.quality)
 
         # Extract parameter space
 
@@ -426,10 +430,25 @@ class CVHelper(object):
         # mplrc('publish_digital')
         mplrc('publish_printed')
 
+        def imshow_com(img, ax=None):
+            """Plot centre of mass image"""
+            if ax is None:
+                ax = plt.gca()
+            rgba_red1 = np.array([1., .0, .0, 1.])
+            rgba_blk0 = np.array([0., .0, .0, .0])
+
+            com = np.zeros((N_sigmas, N_taus, 4))
+            ix = (coms_test[:, :, i] == 1)
+            com[ix, :] = rgba_red1
+            com[~ix, :] = rgba_blk0
+            ax.imshow(com, **comskw)
+
         # Extent
         # With the bottom is sigmas.min(), imshow must have origin='lower'
-        tmin, tmax, dtau = taus.min(), taus.max(), taus[1] - taus[0]
-        smin, smax, dsig = sigmas.min(), sigmas.max(), sigmas[1] - sigmas[0]
+        tmin, tmax = taus.min(), taus.max()
+        dtau = (taus[1] - taus[0]) / 2.
+        smin, smax = sigmas.min(), sigmas.max()
+        dsig = (sigmas[1] - sigmas[0]) / 2.
         extent = [(tmin - dtau), (tmax + dtau), (smin - dsig), (smax + dsig)]
 
         # GENERIC image settings
@@ -452,35 +471,37 @@ class CVHelper(object):
 
         # Colorbar settings
         cbkw = dict(extend='neither', drawedges=False)
-        cbkw.update(orientation='horizontal')
-        cbkw.update(pad=.1, ticks=[.0, .5, 1.])
+        cbkw.update(ticks=np.linspace(.0, 1., 3))
+        cbkw.update(orientation='vertical')
+        crect = [0.96, 0.52, 0.01, 0.43]
+
+        # Figure settings (for plt.subplots)
+        fkw = dict(sharex=True, sharey=True, figsize=(15, 5.7))
+        # fkw = dict(figsize=(15, 6.5))
+
+        # Figure-adjustement settings
+        adjustkw = dict(left=.03, bottom=.05, top=.95, right=.95)
+        adjustkw.update(wspace=.10, hspace=.10)
 
         # Plot accuracies for each training fold overplotted with the best-accuracy positions.
         # -----
 
-        fkw = dict(sharex=True, sharey=True, figsize=(15, 6.5))
-        # fkw = dict(figsize=(15, 6.5))
         fig, axes = plt.subplots(2, N_folds, **fkw)
+        # fig.subplots_adjust(hspace=.2)
+        fig.subplots_adjust(right=.55)
 
-        iter_axes = zip(
-            axes.flat[:N_folds],
-            axes.flat[N_folds:])
-
+        iter_axes = zip(axes.flat[:N_folds], axes.flat[N_folds:])
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
-            # ax_top.imshow(coa_train[:, :, i], **moaskw)
+
+            # Accuracies
             im = ax_top.imshow(coa_train[:, :, i], **moaskw)
-            cbar = fig.colorbar(mappable=im, ax=ax_top, **cbkw)
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
 
             # Plot a red color for the location of the centre-of-mass
             # of the maximum accuracy indices.
-            com = np.zeros((N_sigmas, N_taus, 4))
-            ix = (coms_train[:, :, i] == 1)
-            com[ix, :] = np.array([1., .0, .0, 1.])
-            com[~ix, :] = np.array([0., .0, .0, .0])
-            ax_bot.imshow(com, **comskw)
+            imshow_com(img=coms_train[:, :, i], ax=ax_bot)
 
             # Rest of the plot setup
             ax_bot.set_xlabel(r'$\tau$')
@@ -489,44 +510,35 @@ class CVHelper(object):
                 ax_top.set_ylabel(r'$\sigma$')
                 ax_bot.set_ylabel(r'$\sigma$')
 
-        # Plot colorbar above the accuracies...
+        # Plot colorbar to the right of the accuracies
+        # rect = [left, bottom, width, height]
+        cax = plt.axes(crect)
+        fig.colorbar(mappable=im, cax=cax, **cbkw)
 
-        # ax = fig.add_axes([.25, 1.2, .5, .0])
-        # fig.colorbar(mappable=im, ax=ax, **cbkw)
-
-        fig.tight_layout()
-        qstr = self._qstr(self.quality)
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
         fname = 'moa_Q-{}_train_folds+best.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
-
-        print 'CORRECT THE EXTENT !!!'
 
         # Plot accuracies for each test fold overplotted with the best-accuracy positions.
         # -----
 
         fig, axes = plt.subplots(2, N_folds, **fkw)
 
-        iter_axes = zip(
-            axes.flat[:N_folds],
-            axes.flat[N_folds:])
-
+        iter_axes = zip(axes.flat[:N_folds], axes.flat[N_folds:])
         for i, (ax_top, ax_bot) in enumerate(iter_axes):
+
+            # Accuracies
             im = ax_top.imshow(coa_test[:, :, i], **moaskw)
-            # ax_top.imshow(coa_test[:, :, i], **moaskw)
-            cbar = fig.colorbar(mappable=im, ax=ax_top, **cbkw)
-            # cbar.set_ticks([.0, .5, 1.])
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
 
             # Plot a red color for the location of the centre-of-mass
             # of the maximum accuracy indices.
-            com = np.zeros((N_sigmas, N_taus, 4))
-            ix = (coms_test[:, :, i] == 1)
-            com[ix, :] = np.array([1., .0, .0, 1.])
-            com[~ix, :] = np.array([0., .0, .0, .0])
-            ax_bot.imshow(com, **comskw)
+            imshow_com(img=coms_test[:, :, i], ax=ax_bot)
 
             # Rest of the plot setup
             ax_bot.set_xlabel(r'$\tau$')
@@ -535,17 +547,17 @@ class CVHelper(object):
                 ax_top.set_ylabel(r'$\sigma$')
                 ax_bot.set_ylabel(r'$\sigma$')
 
-        # Plot colorbar above the accuracies...
+        # Plot colorbar to the right of the accuracies
+        # rect = [left, bottom, width, height]
+        cax = plt.axes(crect)
+        fig.colorbar(mappable=im, cax=cax, **cbkw)
 
-        # ax = fig.add_axes([.25, 1.2, .5, .0])
-        # fig.colorbar(mappable=im, ax=ax, **cbkw)
-
-        fig.tight_layout()
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fig.suptitle(rmath('Test - Q = [{}]'.format(qstr)))
         fname = 'moa_Q-{}_test_folds+best.pdf'.format(qstr)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
-
-        print 'CORRECT THE EXTENT !!!'
 
         raise SystemExit
 
