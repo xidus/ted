@@ -3,7 +3,7 @@
 
 cv:
   # Type :: int
-  N_folds: 5
+  N_folds: 10
 
   # Default experiment to run
   # Type :: str
