@@ -432,15 +432,11 @@ class CVHelper(object):
 
         def imshow_com(img, ax=None):
             """Plot centre of mass image"""
-            if ax is None:
-                ax = plt.gca()
-            rgba_red1 = np.array([1., .0, .0, 1.])
-            rgba_blk0 = np.array([0., .0, .0, .0])
-
+            if ax is None: ax = plt.gca()
+            ix = (img == 1)
             com = np.zeros((N_sigmas, N_taus, 4))
-            ix = (coms_test[:, :, i] == 1)
-            com[ix, :] = rgba_red1
-            com[~ix, :] = rgba_blk0
+            com[ix, :] = np.array([1., .0, .0, 1.])
+            com[~ix, :] = np.array([0., .0, .0, .0])
             ax.imshow(com, **comskw)
 
         # Extent
