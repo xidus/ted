@@ -370,15 +370,8 @@ class CVHelper(object):
         # Matrices of maximum accuracies (momas), where the True entries
         # are those, for which the corresponding location in the moa is max.
 
-        # TRAIN
-        momas_train = np.zeros((N_sigmas, N_taus, N_folds)).astype(bool)
-        for i in range(N_folds):
-            momas_train[:, :, i] = max_locs(coa_train[:, :, i])
-
-        # TEST
-        momas_test = np.zeros((N_sigmas, N_taus, N_folds)).astype(bool)
-        for i in range(N_folds):
-            momas_test[:, :, i] = max_locs(coa_test[:, :, i])
+        momas_train = get_matrices_of_maximum_accuracy(coa_train)
+        momas_test = get_matrices_of_maximum_accuracy(coa_test)
 
         # Calculate the locations of the assumed best accuracies
         # This is the centre-of-mass/centroid for each set of
@@ -386,40 +379,15 @@ class CVHelper(object):
 
         # List of centroids for the best accuracy
 
-        # TRAIN
-        centroids_train = [
-            centroid(
-                max_indices(coa_train[:, :, i])
-            )
-            for i in range(N_folds)
-        ]
-
-        # TEST
-        centroids_test = [
-            centroid(
-                max_indices(coa_test[:, :, i])
-            )
-            for i in range(N_folds)
-        ]
+        centroids_train = get_centroids(coa_train)
+        centroids_test = get_centroids(coa_test)
 
         # Use slices to create matrices with NaNs
         # everywhere except at the centroid index.
 
-        # TRAIN
-        coms_train = np.zeros((N_sigmas, N_taus, N_folds))
-        for i, (rix, cix) in enumerate(centroids_train):
-            coms_train[rix, cix, i] = 1
-
-        # NaNs are not shown in imshow-plots.
-        coms_train[coms_train == 0] = np.nan
-
-        # TEST
-        coms_test = np.zeros((N_sigmas, N_taus, N_folds))
-        for i, (rix, cix) in enumerate(centroids_test):
-            coms_test[rix, cix, i] = 1
-
-        # NaNs are not shown in imshow-plots.
-        coms_test[coms_test == 0] = np.nan
+        shape = (N_sigmas, N_taus)
+        coms_train = get_centroid_stack(centroids_train, shape, fill=np.nan)
+        coms_test = get_centroid_stack(centroids_test, shape, fill=np.nan)
 
         if 0:
             # Density estimation of the highest-accuracy locations
@@ -469,32 +437,59 @@ class CVHelper(object):
         comskw = imkw.copy()
         comskw.update(cmap=None)
 
+        # Figure settings (for plt.subplots)
+        ncols = 5
+        nrows = N_folds / ncols
+        figh = [3.3, 5.7]
+        figsize = (15, figh[nrows - 1])
+        fkw = dict(sharex=True, sharey=True, figsize=figsize)
+        # fkw = dict(figsize=(15, 6.5))
+
+        # Figure-adjustement settings
+        figb = [.15, .20]
+        adjustkw = dict(left=.03, bottom=figb[nrows - 1], top=.95, right=.95)
+        adjustkw.update(wspace=.10, hspace=.10)
+
         # Colorbar settings
         cbkw = dict(extend='neither', drawedges=False)
         cbkw.update(ticks=np.linspace(.0, 1., 3))
         cbkw.update(orientation='vertical')
-        crect = [0.96, 0.52, 0.01, 0.43]
+        # rect = [left, bottom, width, height]
+        # crect = [0.96, 0.52, 0.01, 0.43]
+        crect = [0.96, figb[nrows - 1], 0.01, 0.80]
 
-        # Figure settings (for plt.subplots)
-        fkw = dict(sharex=True, sharey=True, figsize=(15, 5.7))
-        # fkw = dict(figsize=(15, 6.5))
+        # Accuracies
+        # ----------
 
-        # Figure-adjustement settings
-        adjustkw = dict(left=.03, bottom=.05, top=.95, right=.95)
-        adjustkw.update(wspace=.10, hspace=.10)
+        """TRAIN: Plot accuracies for each training fold"""
 
-        # Plot accuracies for each training fold overplotted with the best-accuracy positions.
-        # -----
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
 
-        fig, axes = plt.subplots(2, N_folds, **fkw)
-        # fig.subplots_adjust(hspace=.2)
-        fig.subplots_adjust(right=.55)
+        # Plot data on eaxh axis
+        for i, ax in enumerate(axes.flat):
+            im = ax.imshow(coa_train[:, :, i], **moaskw)
 
-        iter_axes = zip(axes.flat[:N_folds], axes.flat[N_folds:])
-        for i, (ax_top, ax_bot) in enumerate(iter_axes):
+        scl_kw = dict(l=r'$\sigma$', b=r'$\tau$', bticks=[.0, .5, 1.])
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks([.0, .5, 1.])
 
-            # Accuracies
-            im = ax_top.imshow(coa_train[:, :, i], **moaskw)
+        # Plot colorbar to the right of the accuracies
+        cax = plt.axes(crect)
+        fig.colorbar(mappable=im, cax=cax, **cbkw)
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
+        fname = 'moa_Q-{}_CV-{}_train_folds.pdf'.format(qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+
+        """TRAIN: Plot best-accuracy positions with centroids"""
+
+        if 0:
 
             # Show the locations of all entries having the maximum accuracy
             ax_bot.imshow(momas_train[:, :, i], **momaskw)
@@ -503,61 +498,37 @@ class CVHelper(object):
             # of the maximum accuracy indices.
             imshow_com(img=coms_train[:, :, i], ax=ax_bot)
 
-            # Rest of the plot setup
-            ax_bot.set_xlabel(r'$\tau$')
-            ax_bot.set_xticks([.0, .5, 1.])
-            if i == 0:
-                ax_top.set_ylabel(r'$\sigma$')
-                ax_bot.set_ylabel(r'$\sigma$')
+        """TEST: Plot accuracies for each test fold"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # Plot data on eaxh axis
+        for i, ax in enumerate(axes.flat):
+            im = ax.imshow(coa_test[:, :, i], **moaskw)
+
+        # Set the x label on the bottom-most axes only
+        for ax in axes.flat[-ncols:]:
+            ax.set_xlabel(r'$\tau$')
+            ax.set_xticks([.0, .5, 1.])
+
+        # Set the y label on the left-most axes only
+        for ax in axes.flat[::ncols]:
+            ax.set_ylabel(r'$\sigma$')
 
         # Plot colorbar to the right of the accuracies
-        # rect = [left, bottom, width, height]
-        cax = plt.axes(crect)
-        fig.colorbar(mappable=im, cax=cax, **cbkw)
-
-        # fig.tight_layout()
-        fig.subplots_adjust(**adjustkw)
-        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_train_folds+best.pdf'.format(qstr)
-        ofname = os.path.join(self._opath, fname)
-        plt.savefig(ofname)
-
-        # Plot accuracies for each test fold overplotted with the best-accuracy positions.
-        # -----
-
-        fig, axes = plt.subplots(2, N_folds, **fkw)
-
-        iter_axes = zip(axes.flat[:N_folds], axes.flat[N_folds:])
-        for i, (ax_top, ax_bot) in enumerate(iter_axes):
-
-            # Accuracies
-            im = ax_top.imshow(coa_test[:, :, i], **moaskw)
-
-            # Show the locations of all entries having the maximum accuracy
-            ax_bot.imshow(momas_train[:, :, i], **momaskw)
-
-            # Plot a red color for the location of the centre-of-mass
-            # of the maximum accuracy indices.
-            imshow_com(img=coms_test[:, :, i], ax=ax_bot)
-
-            # Rest of the plot setup
-            ax_bot.set_xlabel(r'$\tau$')
-            ax_bot.set_xticks([.0, .5, 1.])
-            if i == 0:
-                ax_top.set_ylabel(r'$\sigma$')
-                ax_bot.set_ylabel(r'$\sigma$')
-
-        # Plot colorbar to the right of the accuracies
-        # rect = [left, bottom, width, height]
         cax = plt.axes(crect)
         fig.colorbar(mappable=im, cax=cax, **cbkw)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
         fig.suptitle(rmath('Test - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_test_folds+best.pdf'.format(qstr)
+        fname = 'moa_Q-{}_CV-{}_test_folds.pdf'.format(qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
+        plt.close(fig)
+
+        """TEST: Plot best-accuracy positions with centroids"""
 
         raise SystemExit
 
@@ -607,30 +578,63 @@ def max_indices(arr):
 
 def max_locs(arr):
     """
-    Get boolean array where True means
-    entry value was same as maximum value.
+    Get boolean array where True entries
+    mark location of maximum value
     """
     return (arr == arr.max())
 
 
-def centroid(indices_list):
-    # print 'Indices:'
-    centroid = []
-    for indices in indices_list:
-        # print indices
-        centroid.append(np.round(np.mean(indices)))
-    # print ''
-    print 'Centroid:', centroid
-    # print ''
+def get_matrices_of_maximum_accuracy(cube):
+    """
+    Get stack of boolean matrices where
+    True mark location of maximum value.
+    """
+    momas = np.zeros_like(cube).astype(bool)
+    for i in range(cube.shape[2]):
+        momas[:, :, i] = max_locs(cube[:, :, i])
+    return momas
 
-    return centroid
+
+def centroid(indices_list):
+    """Return indices nearest to centre-of-mass of given indices"""
+    return [np.round(np.mean(indices)) for indices in indices_list]
+
+
+def get_centroids(cube):
+    """Return list of centroids depth-wise for a data cube"""
+    return [centroid(max_indices(cube[:, :, i]))
+            for i in range(cube.shape[2])]
+
+
+def get_centroid_stack(centroids, shape, fill=np.nan):
+    """
+    Create data cube with ones at the location
+    of the centroids and `fill` elsewhere.
+    """
+    coms = np.zeros(shape + (len(centroids),))
+    for i, (rix, cix) in enumerate(centroids):
+        coms[rix, cix, i] = 1
+    coms[coms == 0] = fill
+    return coms
+
+
+def set_common_labels(axes, ncols, l=None, b=None, lticks=None, bticks=None):
+
+    if b is not None:
+        # Set the x label on the bottom-most axes
+        for ax in axes.flat[-ncols:]:
+            ax.set_xlabel(b)
+
+    if l is not None:
+        # Set the y label on the left-most axes
+        for ax in axes.flat[::ncols]:
+            ax.set_ylabel(l)
 
 
 def load_parameters(ifname=env.files.get('params')):
-    """Load parameters for loading the data and running an experiment."""
+    """Load parameters for loading the data and running an experiment"""
     with open(ifname, 'r') as fsock:
-        doc = yaml.load(fsock.read())
-    return doc
+        return yaml.load(fsock.read())
 
 
 def dict2numpy(d):
