@@ -62,19 +62,25 @@ def test_threshold2Dstack():
 
     """stack"""
 
-    # Local minima is in (1, 1)
+    # Min:   0
+    # Max: 100
+    # cut:  50
     s0 = [
         [100,  50, 100],
         [100,   0,  50],
         [100,  50,  50],
     ]
-    # Local minima is in (2, 1)
+    # Min:  50
+    # Max: 200
+    # cut:  75
     s1 = [
         [200, 100, 200],
         [200,  50, 100],
         [200, 100, 100],
     ]
-    # Local minima is in (2, 2)
+    # Min: 100
+    # Max: 300
+    # cut: 100
     s2 = [
         [300, 200, 300],
         [300, 100, 200],
@@ -86,19 +92,16 @@ def test_threshold2Dstack():
 
     """stack_locs"""
 
-    # Local minima is in (1, 1)
     sl0 = [
         [ True, False, False],
         [False,  True, False],
         [False, False,  True],
     ]
-    # Local minima is in (2, 1)
     sl1 = [
         [ True, False, False],
         [False,  True, False],
         [False,  True, False],
     ]
-    # Local minima is in (2, 2)
     sl2 = [
         [False, False, False],
         [False,  True,  True],
@@ -110,33 +113,31 @@ def test_threshold2Dstack():
 
     """answers"""
 
-    # Local minima is in (1, 1)
     a0 = [
         [ True, False, False],
         [False, False, False],
         [False, False, False],
     ]
-    # Local minima is in (2, 1)
     a1 = [
         [ True, False, False],
         [False, False, False],
         [False, False, False],
     ]
-    # Local minima is in (2, 2)
     a2 = [
         [False, False, False],
-        [False, False,  True],
+        [False, False, False],
         [False, False, False],
     ]
 
-    # Define answers
+    # Answer
     answer = np.dstack((a0, a1, a2))
 
-    # Get the results
+    # Result
     result = threshold2Dstack(stack, stack_locs, tau=.5)
 
-    # The test
+    # Test
     assert np.all(answer == result)
+
 
 if __name__ == '__main__':
     test_threshold2Dstack()
