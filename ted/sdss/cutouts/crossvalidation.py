@@ -489,14 +489,27 @@ class CVHelper(object):
 
         """TRAIN: Plot best-accuracy positions with centroids"""
 
-        if 0:
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
 
+        # Plot data on eaxh axis
+        for i, ax in enumerate(axes.flat):
             # Show the locations of all entries having the maximum accuracy
-            ax_bot.imshow(momas_train[:, :, i], **momaskw)
+            ax.imshow(momas_train[:, :, i], **momaskw)
 
             # Plot a red color for the location of the centre-of-mass
             # of the maximum accuracy indices.
-            imshow_com(img=coms_train[:, :, i], ax=ax_bot)
+            imshow_com(img=coms_train[:, :, i], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks([.0, .5, 1.])
+
+        fig.tight_layout()
+        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
+        fname = 'moa_Q-{}_CV-{}_train_best.pdf'.format(qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
 
         """TEST: Plot accuracies for each test fold"""
 
@@ -529,6 +542,28 @@ class CVHelper(object):
         plt.close(fig)
 
         """TEST: Plot best-accuracy positions with centroids"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # Plot data on eaxh axis
+        for i, ax in enumerate(axes.flat):
+            # Show the locations of all entries having the maximum accuracy
+            ax.imshow(momas_test[:, :, i], **momaskw)
+
+            # Plot a red color for the location of the centre-of-mass
+            # of the maximum accuracy indices.
+            imshow_com(img=coms_test[:, :, i], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks([.0, .5, 1.])
+
+        fig.tight_layout()
+        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
+        fname = 'moa_Q-{}_CV-{}_test_best.pdf'.format(qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
 
         raise SystemExit
 
