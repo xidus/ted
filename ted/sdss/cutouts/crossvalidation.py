@@ -446,7 +446,7 @@ class CVHelper(object):
         # fkw = dict(figsize=(15, 6.5))
 
         # Figure-adjustement settings
-        figb = [.15, .20]
+        figb = [.15, .15]
         adjustkw = dict(left=.03, bottom=figb[nrows - 1], top=.95, right=.95)
         adjustkw.update(wspace=.10, hspace=.10)
 
@@ -456,7 +456,9 @@ class CVHelper(object):
         cbkw.update(orientation='vertical')
         # rect = [left, bottom, width, height]
         # crect = [0.96, 0.52, 0.01, 0.43]
-        crect = [0.96, figb[nrows - 1], 0.01, 0.80]
+        rect_b = adjustkw['bottom']
+        rect_h = adjustkw['top'] - adjustkw['bottom']
+        crect = [0.96, rect_b, 0.01, rect_h]
 
         # Accuracies
         # ----------
