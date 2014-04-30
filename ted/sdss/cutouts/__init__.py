@@ -1303,6 +1303,12 @@ wcsremap \
         iglob = os.path.join(self.path(path), match)
         return sorted(glob.glob(iglob))
 
+    def load_cutoutsio(self):
+        # Define filename for previously/to-be saved output
+        fname = os.path.join(self.path('coord'), 'cutoutsio.csv')
+        print 'Loading', fname, '...'
+        return pd.read_csv(fname)
+
     def load_registered_cutouts(self):
         """
         Load all remapped images
@@ -1326,10 +1332,8 @@ wcsremap \
 
         """
 
-        # Define filename for previously/to-be saved output
-        fname = os.path.join(self.path('coord'), 'cutoutsio.csv')
-        print 'Loading', fname, '...'
-        files = pd.read_csv(fname)
+        # list of files to load
+        files = self.load_cutoutsio()
 
         # Select the cutouts with the specified quality flags
         # Include no-one to begin with:
