@@ -54,14 +54,32 @@ xp:
 
     # Scale to smooth to
     # Type :: dict
-    sigmas:
+    sigmas: &sigmas
       start: 1
       stop: 5
       num: 5
 
     # Relative thresholds
     # Type :: dict
-    taus:
+    taus: &taus
       start: .0
       stop: 1.
       num: 50
+
+  # BASELINE EXPERIMENT
+  # -------------------
+
+  # RANDOM
+  blr:
+    sigmas: *sigmas
+    taus: *taus
+
+  # ALWAYS
+  bla:
+    sigmas: *sigmas
+    taus: *taus
+
+  # NEVER
+  bln:
+    sigmas: *sigmas
+    taus: *taus

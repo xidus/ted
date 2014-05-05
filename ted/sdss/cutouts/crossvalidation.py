@@ -51,12 +51,13 @@ class CVHelper(object):
 
     def set_exp(self, key=None):
         if self._xp.get(key) is None: return None
-        getattr(self, '_set_exp_' + key)()
+    #     getattr(self, '_set_exp_' + key)()
 
-    def _set_exp_any(self):
-        xpp = dict2numpy(self._xp.get('any'))
+    # def _set_exp_any(self):
+    #     xpp = dict2numpy(self._xp.get('any'))
+        xpp = dict2numpy(self._xp.get(key))
         xp = Namespace()
-        xp.name = 'any'
+        xp.name = key
         xp.sigmas = xpp.get('sigmas')
         xp.taus = xpp.get('taus')
         xp.N_sigmas = xp.sigmas.size
@@ -93,22 +94,11 @@ class CVHelper(object):
     # Cross validation
     # ----------------
 
-    # def cv(self):
-    #     for n, data in enumerate(self._folds):
-    #         self._set_fold_parameters(fold=n + 1, data=data)
-    #         # Training
-    #         self._cube_of_predictions()
-    #         self._matrix_of_accuracies()
-    #         self._max_entries(moa)
-    #         # Testing
-    #         self._vector_of_predictions()
-    #         self._scalar_of_accuracy()
-    #         # Save to disk
-    #         self._save_fold_results()
-
     def cv(self):
         self._cv_time = time.time()
         getattr(self, '_cv_' + self.xp.name)()
+
+    # ANY
 
     def _cv_any(self):
         for n, data in enumerate(self._folds):
@@ -121,7 +111,7 @@ class CVHelper(object):
 
                 # Training set
                 cop = self._cop_any(train_f)
-                moa = self._moa_any(cop, train_l)
+                moa = self._moa(cop, train_l)
                 self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
 
             except Exception as e:
@@ -134,7 +124,7 @@ class CVHelper(object):
 
                 # Test set
                 cop = self._cop_any(test_f)
-                moa = self._moa_any(cop, test_l)
+                moa = self._moa(cop, test_l)
                 self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
 
             except Exception as e:
@@ -142,18 +132,46 @@ class CVHelper(object):
                 print '_cv_any:', e.message
                 print '_cv_any:', '-' * 50, '\n'
 
+    # BASELINE
+
+    def _cv_blr(self): self._cv_baseline()
+    def _cv_bla(self): self._cv_baseline()
+    def _cv_bln(self): self._cv_baseline()
+
+    def _cv_baseline(self):
+        for n, data in enumerate(self._folds):
+            # Fold number
+            fnum = n + 1
+            # Unpack training and test fold (f: features; l: labels)
+            (train_f, train_l), (test_f, test_l) = data
+
+            # Training set
+            cop = self._cop_blr(train_f)
+            moa = self._moa(cop, train_l)
+            self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
+
+            # Test set
+            cop = self._cop_blr(test_f)
+            moa = self._moa(cop, test_l)
+            self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
+
+
     # Grid search
     # -----------
 
-    def _cube_of_predictions(self, features):
-        """Store result of training with chosen experiment"""
-        # self._cop = getattr(self, '_cop_' + self.xp.name)()
-        return getattr(self, '_cop_' + self.xp.name)(features)
+    # Cube of Predictions (CoP)
+
+    # def _cube_of_predictions(self, features):
+    #     """Store result of training with chosen experiment"""
+    #     # self._cop = getattr(self, '_cop_' + self.xp.name)()
+    #     return getattr(self, '_cop_' + self.xp.name)(features)
+
+    # ANY
 
     def _cop_any(self, features):
         """Return result of training with experiment ANY"""
-        N = features.shape[0]
-        cop = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N)).astype(bool)
+        shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
+        cop = np.zeros(shape).astype(bool)
         for k, cs in enumerate(features):
             cs.set_fname_gsp('prediction_Q-{}.csv'.format(self.qstr))
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
@@ -172,11 +190,38 @@ class CVHelper(object):
                 cs.cleanup()
         return cop
 
-    def _moa_any(self, cop, labels):
+    # BASELINE
+
+    def _cop_blr(self, features):
+        """Return CoP for baseline-experiment RANDOM (BLR)"""
+        return self._cop_baseline(features)
+
+    def _cop_bla(self, features):
+        """Return CoP for baseline-experiment ALWAYS (BLA)"""
+        return self._cop_baseline(features)
+
+    def _cop_bln(self, features):
+        """Return CoP for baseline-experiment NEVER (BLN)"""
+        return self._cop_baseline(features)
+
+    def _cop_baseline(self, features):
+        """Return CoP for baseline experiment"""
+        shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
+        cop = np.zeros(shape).astype(bool)
+        for k, cs in enumerate(features):
+            cs.set_fname_gsp('prediction_Q-{}.csv'.format(self.qstr))
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
+                cop[:, :, k] = cs.gs_prediction
+            else:
+                cop[:, :, k] = cs.gridsearch(**self.xp.gskw)
+        return cop
+
+    # Matrix of accuracies
+
+    def _moa(self, cop, labels):
         """Store training accuracies for experiment ANY.
         A.k.a.: matrix of accuracies (moa)."""
-        print '_moa_any:', 'CoP.shape:', cop.shape
-        print '_moa_any:', 'Labels.shape:', labels.shape
         return (
             # Broadcast along the parameter axes
             (cop == labels[None, None, :])
@@ -287,16 +332,16 @@ class CVHelper(object):
             print ifname
             yield ifname
 
-    def _load_results(self):
+    def _load_results(self, ftype):
         """
         Based on given parameters and chosen experiment, load all
         combinations of filenames possible with the given parameters.
 
         """
-        getattr(self, '_load_results_' + self.xp.name)()
+        #     getattr(self, '_load_results_' + self.xp.name)()
 
-    def _load_results_any(self, ftype):
-        """Load results from experiment ANY"""
+        # def _load_results_any(self, ftype):
+        #     """Load results from experiment ANY"""
 
         # Cube of accuracies
         N_folds = self._cv.get('N_folds')
@@ -311,10 +356,10 @@ class CVHelper(object):
 
     def plot(self):
         """Plot results for chosen experiment"""
-        getattr(self, '_plot_results_' + self.xp.name)()
+    #     getattr(self, '_plot_results_' + self.xp.name)()
 
-    def _plot_results_any(self):
-        """Plot results for experiment ANY"""
+    # def _plot_results_any(self):
+    #     """Plot results for experiment ANY"""
 
         from scipy import stats
         import matplotlib as mpl
@@ -327,8 +372,8 @@ class CVHelper(object):
 
         # Load data
 
-        coa_train = self._load_results_any(ftype='train')
-        coa_test = self._load_results_any(ftype='test')
+        coa_train = self._load_results(ftype='train')
+        coa_test = self._load_results(ftype='test')
 
         # print coa_train.shape
         # raise SystemExit
@@ -483,7 +528,8 @@ class CVHelper(object):
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
         fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_CV-{}_train_folds.pdf'.format(qstr, N_folds)
+        fname = 'moa_E-{}_Q-{}_CV-{}_train_folds.pdf'.format(
+            self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -508,7 +554,8 @@ class CVHelper(object):
 
         fig.tight_layout()
         fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_CV-{}_train_best.pdf'.format(qstr, N_folds)
+        fname = 'moa_E-{}_Q-{}_CV-{}_train_best.pdf'.format(
+            self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -538,7 +585,8 @@ class CVHelper(object):
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
         fig.suptitle(rmath('Test - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_CV-{}_test_folds.pdf'.format(qstr, N_folds)
+        fname = 'moa_E-{}_Q-{}_CV-{}_test_folds.pdf'.format(
+            self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -562,12 +610,14 @@ class CVHelper(object):
 
         fig.tight_layout()
         fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
-        fname = 'moa_Q-{}_CV-{}_test_best.pdf'.format(qstr, N_folds)
+        fname = 'moa_E-{}_Q-{}_CV-{}_test_best.pdf'.format(
+            self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
 
-        raise SystemExit
+        # raise SystemExit
+        return
 
         # Plot distribution of the locations of the best accuracies in the training folds.
         # -----
@@ -779,32 +829,26 @@ def LoG_radius2sigma(radius):
 def cv(exp='any', quality=None):
     """Perform N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
-    cvh.set_exp('any')
+    cvh.set_exp(exp)
     if quality is not None:
         cvh.set_quality(quality)
-        print 'Setting quality to', quality
-        print 'Check:', cvh.quality
     cvh.cv()
 
 
 def analyse(exp='any', quality=None):
     """Analyse results of N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
-    cvh.set_exp('any')
+    cvh.set_exp(exp)
     if quality is not None:
         cvh.set_quality(quality)
-        print 'Setting quality to', quality
-        print 'Check:', cvh.quality
     cvh.analyse()
 
 
 def plot(exp='any', quality=None):
     """Plot results of N-fold cross-validated grid search for chosen experiment."""
     cvh = CVHelper()
-    cvh.set_exp('any')
+    cvh.set_exp(exp)
     if quality is not None:
         cvh.set_quality(quality)
-        print 'Setting quality to', quality
-        print 'Check:', cvh.quality
     cvh.plot()
 

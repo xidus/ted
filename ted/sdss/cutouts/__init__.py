@@ -1519,10 +1519,32 @@ wcsremap \
                 predictions[i, j] = np.any(self.cube_threshold)
 
         # Save copy on disk
-        df = pd.DataFrame(data=predictions)
-        df.to_csv(self._fname_gsp, index=False, header=False)
+        self.save_predictions(predictions)
 
         return predictions
+
+    def gridsearch_blr(self, sigmas, taus):
+        """Baseline experiment using random predictions"""
+        predictions = (np.random.random(size=(sigmas.size, taus.size)) >= .5)
+        self.save_predictions(predictions)
+        return predictions
+
+    def gridsearch_bla(self, sigmas, taus):
+        """Baseline experiment returning True for every parameter pair"""
+        predictions = np.ones((sigmas.size, taus.size)).astype(bool)
+        self.save_predictions(predictions)
+        return predictions
+
+    def gridsearch_bln(self, sigmas, taus):
+        """Baseline experiment returning False for every parameter pair"""
+        predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
+        self.save_predictions(predictions)
+        return predictions
+
+    def save_predictions(self, predictions):
+        """Save matrix of predictions from grid-search run to self._fname_gsp"""
+        df = pd.DataFrame(data=predictions)
+        df.to_csv(self._fname_gsp, index=False, header=False)
 
     @property
     def _fname_gsp(self):
@@ -1542,6 +1564,9 @@ wcsremap \
     @property
     def gs_prediction_time(self):
         return os.path.getmtime(self._fname_gsp)
+
+    # Methods for the experiments
+    # ---------------------------
 
     def calculate_LoG(self, sigma):
         """
