@@ -660,19 +660,27 @@ class CVHelper(object):
         """Analyse results for chosen experiment"""
         getattr(self, '_analyse_' + self.xp.name)()
 
-    def _analyse_blr(self): self._analyse_baseline()
-    def _analyse_bla(self): self._analyse_baseline()
-    def _analyse_bln(self): self._analyse_baseline()
+    def _analyse_any(self): self._analyse_simple()
+
+    def _analyse_blr(self): self._analyse_simple() # baseline()
+    def _analyse_bla(self): self._analyse_simple() # baseline()
+    def _analyse_bln(self): self._analyse_simple() # baseline()
 
     def _analyse_baseline(self):
         """Analyse results for BASELINE experiment"""
+        pass
+
+    def _analyse_simple(self):
+        """Analyse results any experiment"""
 
         # Load data
         coa_train = self._load_results(ftype='train')
-        # coa_test = self._load_results(ftype='test')
+        coa_test = self._load_results(ftype='test')
 
 
-        print 'Best training accuracy:', coa_train.max()
+        print 'Best accuracy:'
+        print ' Train = ', coa_train.max()
+        print ' Test  = ', coa_test.max()
 
 
     # -- END class CVHelper --
