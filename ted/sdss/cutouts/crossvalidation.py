@@ -653,6 +653,26 @@ class CVHelper(object):
         # Plot the surface of average accuracy for the test folds along with standard-deviation surfaces.
         # -----
 
+    # Analysis
+    # --------
+
+    def analyse(self):
+        """Analyse results for chosen experiment"""
+        getattr(self, '_analyse_' + self.xp.name)()
+
+    def _analyse_blr(self): self._analyse_baseline()
+    def _analyse_bla(self): self._analyse_baseline()
+    def _analyse_bln(self): self._analyse_baseline()
+
+    def _analyse_baseline(self):
+        """Analyse results for BASELINE experiment"""
+
+        # Load data
+        coa_train = self._load_results(ftype='train')
+        # coa_test = self._load_results(ftype='test')
+
+
+        print 'Best training accuracy:', coa_train.max()
 
 
     # -- END class CVHelper --
@@ -851,4 +871,16 @@ def plot(exp='any', quality=None):
     if quality is not None:
         cvh.set_quality(quality)
     cvh.plot()
+
+
+def analyse_baseline(quality=None):
+    """Analyse results of N-fold cross-validated grid search for BASELINE experiment."""
+    cvh = CVHelper()
+    if quality is not None:
+        cvh.set_quality(quality)
+
+    for exp in ('blr', 'bla', 'bln'):
+        cvh.set_exp(exp)
+        cvh.analyse()
+
 
