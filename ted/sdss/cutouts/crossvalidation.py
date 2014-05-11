@@ -708,8 +708,6 @@ class CVHelper(object):
     def _analyse_simple(self):
         """Analyse results any experiment"""
 
-        N = self._targets.size
-
         # Load cubes of accuracies
         # (one matrix-of-accuracy for each fold and fold type)
         coa_train = self._load_results(ftype='train')
@@ -732,22 +730,28 @@ class CVHelper(object):
             prediction_vectors.append(cops_test[i][sigma_ix, tau_ix, :])
 
         # Get cube of confusion matrices
-        coc = confusion_cube(prediction_vectors, self._targets)
-        print coc
+        classes = np.array([True, False])
+        coc = confusion_cube(prediction_vectors, self._targets, classes)
 
         mean = coc.mean(axis=2)
         std = coc.std(axis=2)
-        # acc = (mean[0, 0] + mean[1, 1]) / float(labels.size)
-        # acc_std = np.sqrt(std[0, 0] ** 2 + std[1, 1] ** 2)
-        acc_cube = (coc[0, 0, :] + coc[1, 1, :]) / float(N)
+
+        # count_vector contains total number of entries in each fold
+        count_vector = coc.sum(axis=0).sum(axis=0)
+
+        # Divide by total number of entries for given fold to get accuracy
+        acc_cube = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
         acc_mean = acc_cube.mean()
         acc_std = acc_cube.std()
+
+        # Print all results
         print 'Mean table of confusion:'
         print mean
         print '\nStandard deviation:'
         print std
         print '\nMean accuracy (TP + TN):', acc_mean,
-        print '+-', acc_std / np.sqrt(N), '(std = {})'.format(acc_std)
+        print '+-', acc_std / np.sqrt(coc.shape[2]),
+        print '(std = {})'.format(acc_std)
 
     # -- END class CVHelper --
 
@@ -945,19 +949,23 @@ def table_of_confusion():
     pass
 
 
-def confusion_matrix(predictions, labels):
+def confusion_matrix(predictions, labels, classes=None):
     """
-    Returns the confusion matrix corresponding to avery possible class
+    Return confusion matrix of size N x N for N classes.
+
+    Returns the confusion matrix corresponding to every possible class
     that appears in `labels`.
 
     """
 
     import itertools as it
 
-    predictions = np.asarray(predictions)
-    labels = np.asarray(labels)
-    classes = np.sort(np.unique(labels))
-    print 'cfm: ', classes
+    predictions = np.asarray([predictions]).flatten()
+    labels = np.asarray([labels]).flatten()
+    if classes is None:
+        classes = np.sort(np.unique(labels))
+    else:
+        classes = np.sort(np.unique(classes))
     N = classes.size
 
     # The order (0, 1) of the arguments for zip() translates into
@@ -969,8 +977,10 @@ def confusion_matrix(predictions, labels):
     return np.array([z.count(x) for x in p]).reshape(N, N)
 
 
-def confusion_cube(prediction_arrays, labels):
-    return np.dstack([confusion_matrix(p, labels) for p in prediction_arrays])
+def confusion_cube(prediction_arrays, labels, classes=None):
+    # return np.dstack(confusion_matrix(p, labels) for p in prediction_arrays)
+    return np.dstack(
+        [confusion_matrix(p, labels, classes) for p in prediction_arrays])
 
 
 
@@ -1005,14 +1015,14 @@ def plot(exp='any', quality=None):
     cvh.plot()
 
 
-def analyse_baseline(quality=None):
-    """Analyse results of N-fold cross-validated grid search for BASELINE experiment."""
-    cvh = CVHelper()
-    if quality is not None:
-        cvh.set_quality(quality)
+# def analyse_baseline(quality=None):
+#     """Analyse results of N-fold cross-validated grid search for BASELINE experiment."""
+#     cvh = CVHelper()
+#     if quality is not None:
+#         cvh.set_quality(quality)
 
-    for exp in ('blr', 'bla', 'bln'):
-        cvh.set_exp(exp)
-        cvh.analyse()
+#     for exp in ('blr', 'bla', 'bln'):
+#         cvh.set_exp(exp)
+#         cvh.analyse()
 
 
