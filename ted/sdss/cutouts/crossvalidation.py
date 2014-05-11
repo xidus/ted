@@ -27,6 +27,7 @@ class CVHelper(object):
     def __init__(self):
         self._load_parameters()
         self._load_data()
+        self.N_folds = self._cv.get('N_folds')
 
     # Initialise
     # ----------
@@ -84,12 +85,16 @@ class CVHelper(object):
     def qstr(self):
         return self._qstr(self.quality)
 
+    @property
+    def _fname_prediction(self):
+        return 'prediction_Q-{}.csv'.format(self.qstr)
+
     # Fold management
     # ---------------
 
     @property
     def _folds(self):
-        return get_folds(self._css, self._targets, self._cv.get('N_folds'))
+        return get_folds(self._css, self._targets, self.N_folds)
 
     # Cross validation
     # ----------------
@@ -155,7 +160,6 @@ class CVHelper(object):
             moa = self._moa(cop, test_l)
             self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
 
-
     # Grid search
     # -----------
 
@@ -173,7 +177,7 @@ class CVHelper(object):
         shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
         cop = np.zeros(shape).astype(bool)
         for k, cs in enumerate(features):
-            cs.set_fname_gsp('prediction_Q-{}.csv'.format(self.qstr))
+            cs.set_fname_gsp(self._fname_prediction)
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
             # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction
@@ -209,7 +213,7 @@ class CVHelper(object):
         shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
         cop = np.zeros(shape).astype(bool)
         for k, cs in enumerate(features):
-            cs.set_fname_gsp('prediction_Q-{}.csv'.format(self.qstr))
+            cs.set_fname_gsp(self._fname_prediction)
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
             # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
                 cop[:, :, k] = cs.gs_prediction
@@ -294,7 +298,7 @@ class CVHelper(object):
             self.xp.name,
             self._qstr(self.quality),
             ftype,
-            self._cv.get('N_folds'),
+            self.N_folds,
             fnum,
             self._cs.get('bg_model'),
         )
@@ -318,13 +322,12 @@ class CVHelper(object):
 
     def _filenames(self, ftype):
         import itertools as it
-        N = self._cv.get('N_folds')
         args = (
             [self.xp.name],
             [self._qstr(self.quality)],
             [ftype],
-            [N],
-            range(1, N + 1),
+            [self.N_folds],
+            range(1, self.N_folds + 1),
             [self._cs.get('bg_model')],
         )
         for t in it.product(*args, repeat=1):
@@ -344,12 +347,43 @@ class CVHelper(object):
         #     """Load results from experiment ANY"""
 
         # Cube of accuracies
-        N_folds = self._cv.get('N_folds')
+        N_folds = self.N_folds
         coa = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N_folds))
         for i, ifname in enumerate(self._filenames(ftype)):
             df = pd.read_csv(ifname, index_col=[0])
             coa[:, :, i] = df.values
         return coa
+
+    def _load_prediction_cubes(self, ftype=None):
+        """
+        Return prediction cube for each fold and for each fold type.
+        """
+
+        if ftype is None: return None
+
+        cops = []
+
+        for n, data in enumerate(self._folds):
+
+            # Unpack training and test fold (f: features; l: labels)
+            (train_f, train_l), (test_f, test_l) = data
+
+            if ftype == 'test':
+                features = test_f
+            elif ftype == 'train':
+                features = train_f
+
+            # Create new cube-of-predictions container
+            shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
+            cop = np.zeros(shape).astype(bool)
+
+            for k, cs in enumerate(features):
+                cs.set_fname_gsp(self._fname_prediction)
+                cop[:, :, k] = cs.gs_prediction
+
+            cops.append(cop)
+
+        return cops
 
     # Visualisation
     # -------------
@@ -379,11 +413,9 @@ class CVHelper(object):
         # raise SystemExit
 
         # Get CV information
-
-        N_folds = self._cv.get('N_folds')
+        N_folds = self.N_folds
 
         # Get experiment information
-
         qstr = self._qstr(self.quality)
 
         # Extract parameter space
@@ -412,15 +444,18 @@ class CVHelper(object):
 
         # On top of this plot, I need the locations of the best
         # accuracies all together.
-        # Matrices of maximum accuracies (momas), where the True entries
-        # are those, for which the corresponding location in the moa is max.
+        # Matrices of maximum accuracies (momas)
+
+        """True => accuracy for parameter-pair location is max."""
 
         momas_train = get_matrices_of_maximum_accuracy(coa_train)
         momas_test = get_matrices_of_maximum_accuracy(coa_test)
 
-        # Calculate the locations of the assumed best accuracies
-        # This is the centre-of-mass/centroid for each set of
-        # entries with the maximum value.
+        """
+        Calculate the locations of the assumed best accuracies
+        This is the centre-of-mass/centroid for each set of
+        entries with the maximum value.
+        """
 
         # List of centroids for the best accuracy
 
@@ -673,15 +708,46 @@ class CVHelper(object):
     def _analyse_simple(self):
         """Analyse results any experiment"""
 
-        # Load data
+        N = self._targets.size
+
+        # Load cubes of accuracies
+        # (one matrix-of-accuracy for each fold and fold type)
         coa_train = self._load_results(ftype='train')
-        coa_test = self._load_results(ftype='test')
+        # coa_test = self._load_results(ftype='test')
 
+        # List of centroids for the best accuracy
 
-        print 'Best accuracy:'
-        print ' Train = ', coa_train.max()
-        print ' Test  = ', coa_test.max()
+        # Get location of the best parameters for each fold
+        centroids = get_centroids(coa_train)
 
+        # Use these indices to extract the predictions for each test fold
+        # ultimately using these to get, not just accuracies, but the entire
+        # table of confusion based on the confusion matrix (which for binary
+        # classification is the same).
+        # Get list of prediction cubes, one for each fold
+        cops_test = self._load_prediction_cubes(ftype='test')
+
+        prediction_vectors = []
+        for i, (sigma_ix, tau_ix) in enumerate(centroids):
+            prediction_vectors.append(cops_test[i][sigma_ix, tau_ix, :])
+
+        # Get cube of confusion matrices
+        coc = confusion_cube(prediction_vectors, self._targets)
+        print coc
+
+        mean = coc.mean(axis=2)
+        std = coc.std(axis=2)
+        # acc = (mean[0, 0] + mean[1, 1]) / float(labels.size)
+        # acc_std = np.sqrt(std[0, 0] ** 2 + std[1, 1] ** 2)
+        acc_cube = (coc[0, 0, :] + coc[1, 1, :]) / float(N)
+        acc_mean = acc_cube.mean()
+        acc_std = acc_cube.std()
+        print 'Mean table of confusion:'
+        print mean
+        print '\nStandard deviation:'
+        print std
+        print '\nMean accuracy (TP + TN):', acc_mean,
+        print '+-', acc_std / np.sqrt(N), '(std = {})'.format(acc_std)
 
     # -- END class CVHelper --
 
@@ -702,12 +768,14 @@ def max_locs(arr):
 def get_matrices_of_maximum_accuracy(cube):
     """
     Get stack of boolean matrices where
-    True mark location of maximum value.
+    True marks location of maximum value
+    for each layer in the stack.
     """
-    momas = np.zeros_like(cube).astype(bool)
-    for i in range(cube.shape[2]):
-        momas[:, :, i] = max_locs(cube[:, :, i])
-    return momas
+    # momas = np.zeros_like(cube).astype(bool)
+    # for i in range(cube.shape[2]):
+    #     momas[:, :, i] = max_locs(cube[:, :, i])
+    # return momas
+    return (cube == cube.max(axis=0).max(axis=0)[None, None, :])
 
 
 def centroid(indices_list):
@@ -852,6 +920,62 @@ def LoG_radius2sigma(radius):
         return np.array(radius) / np.sqrt(2.)
     else:
         raise TypeError('`radius` is neither array-like or a number.')
+
+
+# -----------------------------------------------------------------------------
+
+def table_of_confusion():
+    """
+                  Prediction
+                  ----------
+
+                  T         F
+
+             ---------- ----------
+    A|      |          |          |
+    c|  T   |    TP    |    FN    |
+    t|      |          | (Type 2) |
+    u|       ---------- ----------
+    a|      |          |          |
+    l|  F   |    FP    |    TN    |
+            | (Type 1) |          |
+             ---------- ----------
+
+    """
+    pass
+
+
+def confusion_matrix(predictions, labels):
+    """
+    Returns the confusion matrix corresponding to avery possible class
+    that appears in `labels`.
+
+    """
+
+    import itertools as it
+
+    predictions = np.asarray(predictions)
+    labels = np.asarray(labels)
+    classes = np.sort(np.unique(labels))
+    print 'cfm: ', classes
+    N = classes.size
+
+    # The order (0, 1) of the arguments for zip() translates into
+    # (row-wise, col-wise) location of the two inputs. In this case,
+    # since labels are given before predictions, the labels will be seen
+    # along the rows, and the predictted classes shown  along the columns.
+    z = zip(labels, predictions)
+    p = it.product(classes, repeat=2)
+    return np.array([z.count(x) for x in p]).reshape(N, N)
+
+
+def confusion_cube(prediction_arrays, labels):
+    return np.dstack([confusion_matrix(p, labels) for p in prediction_arrays])
+
+
+
+
+# -----------------------------------------------------------------------------
 
 
 def cv(exp='any', quality=None):
