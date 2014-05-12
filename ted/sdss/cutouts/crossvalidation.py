@@ -401,7 +401,7 @@ class CVHelper(object):
     # def _plot_results_any(self):
     #     """Plot results for experiment ANY"""
 
-        from scipy import stats
+        # from scipy import stats
         import matplotlib as mpl
         # Select backend beforehand to make it run on the image servers
         mpl.use('pdf')
@@ -475,12 +475,11 @@ class CVHelper(object):
         coms_train = get_centroid_stack(centroids_train, shape, fill=np.nan)
         coms_test = get_centroid_stack(centroids_test, shape, fill=np.nan)
 
-        if 0:
-            # Density estimation of the highest-accuracy locations
-            kernel_train = stats.gaussian_kde(coms_train.sum(axis=2))
+        # # Density estimation of the highest-accuracy locations
+        # kernel_train = stats.gaussian_kde(coms_train.sum(axis=2))
 
-            # Density estimation of the highest-acuracies for the sum of the test accuracies.
-            kernel_test = stats.gaussian_kde(coa_test.sum(axis=2))
+        # # Density estimation of the highest-acuracies for the sum of the test accuracies.
+        # kernel_test = stats.gaussian_kde(coa_test.sum(axis=2))
 
         # Plot settings
         # -------------
@@ -657,42 +656,43 @@ class CVHelper(object):
         plt.savefig(ofname)
         plt.close(fig)
 
-        # raise SystemExit
+        """EXIT"""
+        """EXIT"""
+        """EXIT"""
         return
 
-        # Plot distribution of the locations of the best accuracies in the training folds.
-        # -----
-        fkw = dict(sharex=True, sharey=True, figsize=(15, 8))
-        fig, (ax1, ax2) = plt.subplots(1, 2, **fkw)
+        """
+        Plot distribution of the locations of
+        the best accuracies in the training folds.
+        """
 
-        X, Y = np.mgrid[0:1:N_sigmas * 1j, 0:1:N_taus * 1j]
-        positions = np.vstack([X.ravel(), Y.ravel()])
-        Z = np.reshape(kernel_train(positions).T, X.shape)
-        ax1.imshow(np.rot90(Z), **moaskw)
+        # fkw = dict(sharex=True, sharey=True, figsize=(15, 8))
+        # fig, (ax1, ax2) = plt.subplots(1, 2, **fkw)
 
-        # Rest of the plot setup
-        ax1.set_ylabel(r'$\sigma$')
-        for ax in (ax1, ax2):
-            ax.set_xlabel(r'$\tau$')
+        # X, Y = np.mgrid[0:1:N_sigmas * 1j, 0:1:N_taus * 1j]
+        # positions = np.vstack([X.ravel(), Y.ravel()])
+        # Z = np.reshape(kernel_train(positions).T, X.shape)
+        # ax1.imshow(np.rot90(Z), **moaskw)
 
         # Plot colorbar above the accuracies...
         # ax = fig.add_axes([.25, 1.2, .5, .0])
         # fig.colorbar(mappable=im, ax=ax, **cbkw)
 
-        print 'HI'
+        # fig.tight_layout()
+        # fname = 'kde_coms+coa_test.sum.pdf'
+        # ofname = os.path.join(self._opath, fname)
+        # plt.savefig(ofname)
 
-        fig.tight_layout()
-        fname = 'kde_coms+coa_test.sum.pdf'
-        ofname = os.path.join(self._opath, fname)
-        plt.savefig(ofname)
+        """
+        Plot distribution of
+        the sum of the test-fold accuracy matrices.
+        """
 
-        print 'CORRECT THE EXTENT !!!'
-
-        # Plot distribution of the sum of the test-fold accuracy matrices.
-        # -----
-
-        # Plot the surface of average accuracy for the test folds along with standard-deviation surfaces.
-        # -----
+        """
+        Plot the surface of
+        average accuracy for the test folds
+        along with standard-deviation surfaces.
+        """
 
     # Analysis
     # --------
@@ -745,15 +745,16 @@ class CVHelper(object):
         classes = np.array([True, False])
         coc = confusion_cube(predictions, labels, classes)
         print 'coc.shape =', coc.shape
-        print 'coc[:, :, 0]:'
-        print coc[:, :, 0]
+        # print 'coc[:, :, 0]:'
+        # print coc[:, :, 0]
 
-        print labels[0]
-        print predictions[0]
+        # print labels[0]
+        # print predictions[0]
         # raise SystemExit
 
         mean = coc.mean(axis=2)
         std = coc.std(axis=2)
+        err = std / np.sqrt(coc.shape[2])
 
         # count_vector contains total number of entries in each fold
         count_vector = coc.sum(axis=0).sum(axis=0).astype(float)
@@ -765,6 +766,7 @@ class CVHelper(object):
         acc_vector = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
         acc_mean = acc_vector.mean()
         acc_std = acc_vector.std()
+        acc_err = acc_std / np.sqrt(coc.shape[2])
 
         # Print all results
         print '\nClass order in confusion matrix:', list(classes)
@@ -773,10 +775,11 @@ class CVHelper(object):
         print mean
         print '\nStandard deviation:'
         print std
+        print '\nStandard error:'
+        print err
 
         print '\nMean accuracy (TP + TN):', acc_mean,
-        print '+-', acc_std / np.sqrt(coc.shape[2]),
-        print '(std = {})'.format(acc_std)
+        print '+-', acc_err, '(std = {})'.format(acc_std)
 
     # -- END class CVHelper --
 
