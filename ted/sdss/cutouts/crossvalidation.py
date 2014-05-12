@@ -732,23 +732,32 @@ class CVHelper(object):
         # Get cube of confusion matrices
         classes = np.array([True, False])
         coc = confusion_cube(prediction_vectors, self._targets, classes)
+        print 'coc.shape =', coc.shape
+        print 'coc:'
+        print coc
 
         mean = coc.mean(axis=2)
         std = coc.std(axis=2)
 
         # count_vector contains total number of entries in each fold
-        count_vector = coc.sum(axis=0).sum(axis=0)
+        count_vector = coc.sum(axis=0).sum(axis=0).astype(float)
 
         # Divide by total number of entries for given fold to get accuracy
-        acc_cube = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
-        acc_mean = acc_cube.mean()
-        acc_std = acc_cube.std()
+        #   Assuming here that the class of interest is the one indexed
+        #   first along the rows and columns of the confusion matrix,
+        #   i.e. the class SN.
+        acc_vector = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
+        acc_mean = acc_vector.mean()
+        acc_std = acc_vector.std()
 
         # Print all results
-        print 'Mean table of confusion:'
+        print '\nClass order in confusion matrix:', list(classes)
+
+        print '\nMean table of confusion:'
         print mean
         print '\nStandard deviation:'
         print std
+
         print '\nMean accuracy (TP + TN):', acc_mean,
         print '+-', acc_std / np.sqrt(coc.shape[2]),
         print '(std = {})'.format(acc_std)
@@ -951,10 +960,20 @@ def table_of_confusion():
 
 def confusion_matrix(predictions, labels, classes=None):
     """
-    Return confusion matrix of size N x N for N classes.
 
-    Returns the confusion matrix corresponding to every possible class
-    that appears in `labels`.
+    Parameters
+    ----------
+    classes : 1D-array
+        List of classes to compare against.
+        If provided, the order of the entries is preserved along
+        the rows and columns of the returned confusion matrix.
+
+    Returns
+    -------
+    CFM : 2D-array
+        The confusion matrix of shape (N, N) for N classes.
+        The confusion matrix corresponding to every possible
+        class that appears in `labels`.
 
     """
 
@@ -963,9 +982,13 @@ def confusion_matrix(predictions, labels, classes=None):
     predictions = np.asarray([predictions]).flatten()
     labels = np.asarray([labels]).flatten()
     if classes is None:
-        classes = np.sort(np.unique(labels))
+        # np.unique also sorts the data
+        classes = np.unique(labels)
     else:
-        classes = np.sort(np.unique(classes))
+        pass
+        # Can not use np.unique, since this also sorts the input array.
+        # Can not use Python's set() function since its elements are unordered.
+        # classes = np.array(list(set(classes)))
     N = classes.size
 
     # The order (0, 1) of the arguments for zip() translates into
@@ -974,6 +997,7 @@ def confusion_matrix(predictions, labels, classes=None):
     # along the rows, and the predictted classes shown  along the columns.
     z = zip(labels, predictions)
     p = it.product(classes, repeat=2)
+    # print list(p)
     return np.array([z.count(x) for x in p]).reshape(N, N)
 
 
