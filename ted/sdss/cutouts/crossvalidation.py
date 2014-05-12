@@ -362,6 +362,7 @@ class CVHelper(object):
         if ftype is None: return None
 
         cops = []
+        labels = []
 
         for n, data in enumerate(self._folds):
 
@@ -370,8 +371,10 @@ class CVHelper(object):
 
             if ftype == 'test':
                 features = test_f
+                labels.append(test_l)
             elif ftype == 'train':
                 features = train_f
+                labels.append(train_l)
 
             # Create new cube-of-predictions container
             shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
@@ -383,7 +386,7 @@ class CVHelper(object):
 
             cops.append(cop)
 
-        return cops
+        return cops, labels
 
     # Visualisation
     # -------------
@@ -711,7 +714,6 @@ class CVHelper(object):
         # Load cubes of accuracies
         # (one matrix-of-accuracy for each fold and fold type)
         coa_train = self._load_results(ftype='train')
-        # coa_test = self._load_results(ftype='test')
 
         # List of centroids for the best accuracy
 
@@ -723,18 +725,26 @@ class CVHelper(object):
         # table of confusion based on the confusion matrix (which for binary
         # classification is the same).
         # Get list of prediction cubes, one for each fold
-        cops_test = self._load_prediction_cubes(ftype='test')
+        cops, labels = self._load_prediction_cubes(ftype='test')
 
-        prediction_vectors = []
-        for i, (sigma_ix, tau_ix) in enumerate(centroids):
-            prediction_vectors.append(cops_test[i][sigma_ix, tau_ix, :])
+        # print labels
+        # raise SystemExit
+
+        # Get a list of vectors containing the predictions
+        predictions = []
+        for fold_ix, (sigma_ix, tau_ix) in enumerate(centroids):
+            predictions.append(cops[fold_ix][sigma_ix, tau_ix, :])
 
         # Get cube of confusion matrices
         classes = np.array([True, False])
-        coc = confusion_cube(prediction_vectors, self._targets, classes)
+        coc = confusion_cube(predictions, labels, classes)
         print 'coc.shape =', coc.shape
-        print 'coc:'
-        print coc
+        print 'coc[:, :, 0]:'
+        print coc[:, :, 0]
+
+        print labels[0]
+        print predictions[0]
+        # raise SystemExit
 
         mean = coc.mean(axis=2)
         std = coc.std(axis=2)
@@ -958,7 +968,7 @@ def table_of_confusion():
     pass
 
 
-def confusion_matrix(predictions, labels, classes=None):
+def _confusion_matrix(predictions, labels, classes=None):
     """
 
     Parameters
@@ -1001,12 +1011,9 @@ def confusion_matrix(predictions, labels, classes=None):
     return np.array([z.count(x) for x in p]).reshape(N, N)
 
 
-def confusion_cube(prediction_arrays, labels, classes=None):
-    # return np.dstack(confusion_matrix(p, labels) for p in prediction_arrays)
-    return np.dstack(
-        [confusion_matrix(p, labels, classes) for p in prediction_arrays])
-
-
+def confusion_cube(predictions, labels, classes=None):
+    from sklearn.metrics import confusion_matrix as cm
+    return np.dstack([cm(l, p, classes) for (p, l) in zip(predictions, labels)])
 
 
 # -----------------------------------------------------------------------------
