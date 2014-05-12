@@ -87,7 +87,8 @@ class CVHelper(object):
 
     @property
     def _fname_prediction(self):
-        return 'prediction_Q-{}.csv'.format(self.qstr)
+        # return 'prediction_Q-{}.csv'.format(self.qstr)
+        return 'prediction-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
 
     # Fold management
     # ---------------
@@ -117,7 +118,7 @@ class CVHelper(object):
                 # Training set
                 cop = self._cop_any(train_f)
                 moa = self._moa(cop, train_l)
-                self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
+                self._save_fold_results_moa(moa=moa, ftype='train', fnum=fnum)
 
             except Exception as e:
                 print '_cv_any:', fnum, 'train'
@@ -130,7 +131,7 @@ class CVHelper(object):
                 # Test set
                 cop = self._cop_any(test_f)
                 moa = self._moa(cop, test_l)
-                self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
+                self._save_fold_results_moa(moa=moa, ftype='test', fnum=fnum)
 
             except Exception as e:
                 print '_cv_any:', fnum, 'test'
@@ -153,12 +154,12 @@ class CVHelper(object):
             # Training set
             cop = self._cop_blr(train_f)
             moa = self._moa(cop, train_l)
-            self._save_fold_results_any(moa=moa, ftype='train', fnum=fnum)
+            self._save_fold_results_moa(moa=moa, ftype='train', fnum=fnum)
 
             # Test set
             cop = self._cop_blr(test_f)
             moa = self._moa(cop, test_l)
-            self._save_fold_results_any(moa=moa, ftype='test', fnum=fnum)
+            self._save_fold_results_moa(moa=moa, ftype='test', fnum=fnum)
 
     # Grid search
     # -----------
@@ -291,6 +292,7 @@ class CVHelper(object):
     def _fn_fstr(self):
         # return 'moa_{ft}_E-{xp}_CV-{N}-{n}_BG-{bg}_Q-{qstr}.csv'
         return 'moa_E-{}_Q-{}_{}_CV-{}-{}_BG-{}.csv'
+        # return '{}_E-{}_Q-{}_{}_CV-{}-{}_BG-{}.csv'
 
     def _fn_kw(self, ftype, fnum):
         """Return current state (self._fold)"""
@@ -303,12 +305,13 @@ class CVHelper(object):
             self._cs.get('bg_model'),
         )
 
-    def _save_fold_results(self):
-        getattr(self, '_save_fold_results_' + self.xp.name)()
+    # def _save_fold_results(self):
+    #     getattr(self, '_save_fold_results_' + self.xp.name)()
 
-    def _save_fold_results_any(self, moa, ftype, fnum):
+    def _save_fold_results_moa(self, moa, ftype, fnum):
         # fname = self._fn_fstr.format(**self._fn_kw(ftype=ftype, fnum=fnum))
         fname = self._fn_fstr.format(*self._fn_kw(ftype=ftype, fnum=fnum))
+        # fname = self._fn_fstr.format(*self._fn_kw(rtype='moa', ftype=ftype, fnum=fnum))
         ofname = os.path.join(self._opath, fname)
         # print 'Saving fold results to:', ofname
         print 'Saving fold results to:', fname
@@ -710,6 +713,9 @@ class CVHelper(object):
 
     def _analyse_simple(self):
         """Analyse results any experiment"""
+
+        # print self._fname_prediction
+        # raise SystemExit
 
         # Load cubes of accuracies
         # (one matrix-of-accuracy for each fold and fold type)
