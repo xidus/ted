@@ -410,7 +410,7 @@ class CVHelper(object):
         return ofname
 
     def _save_fold_results_signals(self, signals, ftype, fnum):
-        fname = self._fn_fstr_signals.format(*self._fn_kw(ftype=ftype, fnum=fnum))
+        fname = self._fn_fstr_many_signals.format(*self._fn_kw(ftype=ftype, fnum=fnum))
         ofname = os.path.join(self._opath, fname)
         print 'Saving fold results to:', fname
         with open(ofname, 'w+') as fsock:
