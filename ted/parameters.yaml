@@ -66,6 +66,13 @@ xp:
       stop: 1.
       num: 50
 
+  # The expanded experiment
+  many:
+
+    sigmas: *sigmas
+    taus: *taus
+
+
   # BASELINE EXPERIMENT
   # -------------------
 
