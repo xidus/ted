@@ -295,7 +295,7 @@ class CutoutSequence(object):
     # The memory hurdle
     # -----------------
 
-    def load(self, clip, bg_model, quality, force=False):
+    def load(self, clip=None, bg_model=None, quality=None, force=False):
         """
         Load remapped cutouts and perform preliminary steps for the analysis
 
@@ -320,6 +320,34 @@ class CutoutSequence(object):
         """
 
         # Set the clip size
+        if clip is not None:
+            self.set_clip(clip)
+
+        # Set the background model once for easy reference
+        if bg_model is not None:
+            self.set_bg_model(bg_model)
+
+        # Set qualities to load into memory
+        if quality is not None:
+            self.set_load_quality(quality)
+
+        # Set the quality to use to the same as the load quality.
+        self.set_quality(quality=self.load_quality)
+
+        # Load data into memory
+        self.load_registered_cutouts()
+
+    def set_cs_parameters(self, clip, bg_model, quality):
+        """
+        Set all CutoutSequence parameters in one go.
+
+        Notes
+        -----
+        Used by CVHelper() in crossvalidation module.
+
+        """
+
+        # Set the clip size
         self.set_clip(clip)
 
         # Set the background model once for easy reference
@@ -331,8 +359,6 @@ class CutoutSequence(object):
         # Set the quality to use to the same as the load quality.
         self.set_quality(quality=self.load_quality)
 
-        # Load data into memory
-        self.load_registered_cutouts()
 
     def set_clip(self, clip=0):
         self.clip = clip
@@ -1303,11 +1329,35 @@ wcsremap \
         iglob = os.path.join(self.path(path), match)
         return sorted(glob.glob(iglob))
 
-    def load_cutoutsio(self):
+    def load_cutoutsio_wrapper(self):
+        return self.select_usable(
+            self.select_by_chosen_quality(
+                self.load_cutoutsio()))
+
+    @property
+    def fname_cutoutsio(self):
+        return os.path.join(self.path('coord'), 'cutoutsio.csv')
+
+    def load_cutoutsio(self, verbose=False):
         # Define filename for previously/to-be saved output
-        fname = os.path.join(self.path('coord'), 'cutoutsio.csv')
-        print 'Loading', fname, '...'
-        return pd.read_csv(fname)
+        if verbose:
+            print 'Loading', self.fname_cutoutsio, '...'
+        return pd.read_csv(self.fname_cutoutsio)
+
+    def select_by_chosen_quality(self, files):
+        """Select the cutouts with the specified quality flags"""
+
+        # Start out with none selected:
+        qix = np.zeros(files.shape[0]).astype(bool)
+
+        # Add if is of chosen quality:
+        for q in self.load_quality:
+            qix |= (files.quality == q)
+
+        return files.iloc[qix]
+
+    def select_usable(self, files):
+        return files.iloc[(files.use == 1).values]
 
     def load_registered_cutouts(self):
         """
@@ -1334,24 +1384,8 @@ wcsremap \
 
         # list of files to load
         files = self.load_cutoutsio()
-
-        # Select the cutouts with the specified quality flags
-        # Include no-one to begin with:
-        qix = np.zeros(files.shape[0]).astype(bool)
-        for q in self.load_quality:
-            # Add if chosen
-            qix |= (files.quality == q)
-        files = files.iloc[qix]
-
-        # Select only usable cutouts
-        N_b = files.shape[0]
-        uix = (files.use == 1)
-        # Raises: NotImplementedError("iLocation based boolean indexing
-        #         on an integer type is not available")
-        # files = files.iloc[uix]
-        files = files.iloc[uix.values]
-        N_a = files.shape[0]
-        print '\nNumber of unusable cutouts:', N_b - N_a, '\n'
+        files = self.select_by_chosen_quality(files)
+        files = self.select_usable(files)
 
         # Save the full images so that view can be changed during runtime.
         self._cube_remap = np.zeros(self.size + (files.shape[0],))
@@ -1372,7 +1406,7 @@ wcsremap \
                 print ifname.replace(env.paths.get('data'), '')
                 print 'Flagging cutout and starting over ...'
                 files.iloc[i:i + 1]['use'] = 0
-                files.to_csv(fname, index=False, header=True)
+                files.to_csv(self.fname_cutoutsio, index=False, header=True)
                 breakout = True
                 break
 
@@ -1495,12 +1529,58 @@ wcsremap \
         self.threshold_intensities(tau=tau)
         return np.any(self.cube_threshold)
 
+    def experiment_many(self, sigma, tau):
+        """
+        Parameters
+        ----------
+        sigma : float
+            scale for the LoG filter
+        tau : float
+            relative threshold
+
+        Returns
+        -------
+        signals : int, vector
+            signal vector of the same length as the cutout sequence
+            with each entry counting the number of signals there were
+            in the cutout frame at the same position.
+
+        """
+        self.calculate_LoG(sigma=sigma)
+        self.compare_neighbours()
+        self.threshold_intensities(tau=tau)
+        return self.cube_threshold.sum(axis=0).sum(axis=0)
+
     def gridsearch(self, exp='any', **params):
         """Run grid search for given experiment"""
         return getattr(self, 'gridsearch_' + exp)(**params)
 
     def gridsearch_any(self, sigmas, taus):
         """Run grid search for experiment 'ANY'"""
+
+         # Matrix of predictions (MoP)
+        predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
+
+        # Sigmas
+        for i, sigma in enumerate(sigmas):
+            # Set the scale of the objects that are looked for
+            # No need to perform LoG every time I change between thresholds
+            self.calculate_LoG(sigma=sigma)
+            self.compare_neighbours()
+
+            # Threshold values
+            for j, tau in enumerate(taus):
+                self.threshold_intensities(tau=tau)
+                # Save the resulting prediction (bool)
+                predictions[i, j] = np.any(self.cube_threshold)
+
+        # Save copy on disk
+        self.save_predictions(predictions)
+
+        return predictions
+
+    def gridsearch_many(self, sigmas, taus, max_len=None):
+        """Run grid search for experiment 'MANY'"""
 
          # Matrix of predictions (MoP)
         predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
@@ -1661,10 +1741,28 @@ wcsremap \
             plot_LoG_samples(self, offset=i)
 
     def __len__(self):
-        return self.files.shape[0]
+        if 'files' in dir(self):
+            files = self.files
+        else:
+            files = self.load_cutoutsio_wrapper()
+        return files.shape[0]
 
     def __getitem__(self, key):
         """
+        Returns
+        -------
+        FD : 2D-array
+            [
+                [date_0, file_0],
+                [date_1, file_1],
+                [date_2, file_2],
+                ...
+                [date_n, file_n],
+
+                dtype=object
+            ]
+
+
         Python documentation
         --------------------
         Called to implement evaluation of self[key]. For sequence types,
