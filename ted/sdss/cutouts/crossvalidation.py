@@ -908,7 +908,7 @@ class CVHelper(object):
             fnum = fold_ix + 1
             sigma_ix, tau_ix = centroids[fold_ix]
             sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
-            s = rmath(fstr.format(fnum, sigma, tau))
+            s = rmath(fstr.format(sigma, tau))
             ax.text(.015, .15, s, transform=ax.transAxes, **tkw)
 
             # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
@@ -921,12 +921,12 @@ class CVHelper(object):
             ax2 = ax.twinx()
             ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
 
-            ax.set_yticks([.0, .5, 1.])
+            # ax.set_yticks([.0, .5, 1.])
             ax2.set_yticks([])
 
         ax.set_xlabel(rmath('Required number of frames with a signal'))
         ax.set_xlim(np.min(N_frames), np.max(N_frames))
-        ax.set_ylim(.0, 1.)
+        # ax.set_ylim(.0, 1.)
 
         fig.tight_layout()
         fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
