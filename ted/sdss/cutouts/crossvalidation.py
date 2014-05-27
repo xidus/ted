@@ -893,11 +893,19 @@ class CVHelper(object):
         fig, axes = plt.subplots(N_folds, 1, **fkw)
 
         # pkw = dict(lw=3, c=colors[0])
-        bboxkw = dict(facecolor='#e6e6e6', edgecolor='#cccccc', pad=10.0)
-        tkw = dict(fontsize=15, ha='left', va='bottom', bbox=bboxkw)
+        # bboxkw = dict(facecolor='#e6e6e6', edgecolor='#cccccc', pad=10.0)
+        # tkw = dict(fontsize=15, ha='left', va='bottom', bbox=bboxkw)
 
         # fstr = r'Fold {}: \sigma = {:.2f}, \tau = {:.2f}'
-        fstr = r'\sigma = {:.2f}, \tau = {:.2f}'
+        # fstr = r'\sigma = {:.2f}, \tau = {:.2f}'
+
+        # OR
+
+        # Figure proportions
+        figsize = fig.get_size_inches()
+        fig_w2h = float(figsize[0]) / figsize[1]
+        # (left, bottom, width, height)
+        extent = [.02, .15, .25 / fig_w2h , .25]
 
         # Plot data on eaxh axis
         for fold_ix, ax in enumerate(axes.flat):
@@ -905,11 +913,29 @@ class CVHelper(object):
             if fold_ix == 0:
                 ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=15)
 
+            # Display the values of \sigma and \tau
+
             fnum = fold_ix + 1
             sigma_ix, tau_ix = centroids[fold_ix]
             sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
-            s = rmath(fstr.format(sigma, tau))
-            ax.text(.015, .15, s, transform=ax.transAxes, **tkw)
+            # s = rmath(fstr.format(sigma, tau))
+            # ax.text(.015, .15, s, transform=ax.transAxes, **tkw)
+
+            # OR add insert plot
+
+            axin = fig.add_axes(extent, axisbg='#eeeeee', transform=ax.transAxes)
+            # axin.axhline(y=0, lw=.5, c='k')
+            axin.plot([sigma], [tau], ls='none', marker='o', ms=5, mec='none', c='k')
+            # axin.set_title(rmath('Profile'), fontsize=5)
+            axin.xaxis.set_ticks_position('top')
+            axin.set_ylabel(rmath('\sigma'), fontsize=4)
+            axin.set_xlabel(rmath('\tau'), fontsize=4)
+            axin.set_ylim(*self.xp.sigmas[[0, -1]])
+            axin.set_xlim(*self.xp.taus[[0, -1]])
+            axin.set_xticks([])
+            axin.set_yticks([])
+
+            # Add the accuracy lines
 
             # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
             ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
