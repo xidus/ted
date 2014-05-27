@@ -1549,7 +1549,14 @@ wcsremap \
         self.calculate_LoG(sigma=sigma)
         self.compare_neighbours()
         self.threshold_intensities(tau=tau)
-        return self.cube_threshold.sum(axis=0).sum(axis=0)
+
+        # Build vector counting number of signals in each frame
+        signals = self.cube_threshold.sum(axis=0).sum(axis=0)
+
+        # Save copy on disk
+        self.save_predictions(signals)
+
+        return signals
 
     def gridsearch(self, exp='any', **params):
         """Run grid search for given experiment"""
@@ -1632,6 +1639,7 @@ wcsremap \
 
     def set_fname_gsp(self, fname):
         self._fname_gs_prediction = os.path.join(self.path('results'), fname)
+        return self._fname_gs_prediction
 
     @property
     def has_gs_prediction(self):
