@@ -95,6 +95,10 @@ class CVHelper(object):
         # return 'prediction_Q-{}.csv'.format(self.qstr)
         return 'prediction-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
 
+    @property
+    def _fname_signals(self):
+        return 'signals-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
+
     # Fold management
     # ---------------
 
@@ -283,15 +287,21 @@ class CVHelper(object):
     # MANY
 
     def _signals_many(self, features, **params):
-        """Return CoP for baseline experiment"""
+        """Return list of signal vectors for experiment MANY"""
         signals = []
         for k, cs in enumerate(features):
-            cs.load()
-            cs.set_quality(self.quality)
-            cs.calibrate()
-            cs.calculate_residuals()
-            signals.append(cs.experiment_many(**params))
-            cs.cleanup()
+            # fname = cs.set_fname_gsp(self._fname_signals)
+            cs.set_fname_gsp(self._fname_signals)
+            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+                print  '*' * 10 + ' Using previously saved data ' + '*' * 10
+                signals.append(cs.gs_prediction.flatten())
+            else:
+                cs.load()
+                cs.set_quality(self.quality)
+                cs.calibrate()
+                cs.calculate_residuals()
+                signals.append(cs.experiment_many(**params))
+                cs.cleanup()
         return signals
 
     # Matrix of accuracies
@@ -971,45 +981,7 @@ class CVHelper(object):
         for fold_ix, (sigma_ix, tau_ix) in enumerate(centroids):
             predictions.append(cops[fold_ix][sigma_ix, tau_ix, :])
 
-        # Get cube of confusion matrices
-        classes = np.array([True, False])
-        coc = confusion_cube(predictions, labels, classes)
-        print 'coc.shape =', coc.shape
-        # print 'coc[:, :, 0]:'
-        # print coc[:, :, 0]
-
-        # print labels[0]
-        # print predictions[0]
-        # raise SystemExit
-
-        mean = coc.mean(axis=2)
-        std = coc.std(axis=2)
-        err = std / np.sqrt(coc.shape[2])
-
-        # count_vector contains total number of entries in each fold
-        count_vector = coc.sum(axis=0).sum(axis=0).astype(float)
-
-        # Divide by total number of entries for given fold to get accuracy
-        #   Assuming here that the class of interest is the one indexed
-        #   first along the rows and columns of the confusion matrix,
-        #   i.e. the class SN.
-        acc_vector = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
-        acc_mean = acc_vector.mean()
-        acc_std = acc_vector.std()
-        acc_err = acc_std / np.sqrt(coc.shape[2])
-
-        # Print all results
-        print '\nClass order in confusion matrix:', list(classes)
-
-        print '\nMean table of confusion:'
-        print mean
-        print '\nStandard deviation:'
-        print std
-        print '\nStandard error:'
-        print err
-
-        print '\nMean accuracy (TP + TN):', acc_mean,
-        print '+-', acc_err, '(std = {})'.format(acc_std)
+        display_table_of_confusion(predictions, labels)
 
     def _analyse_many(self):
 
@@ -1022,6 +994,17 @@ class CVHelper(object):
         # Include zero (always yes) and the max number of frames
         N_frames = np.arange(0, N_max_frames + 1)
 
+        # Cube of predictions
+        # Depth-wise: fold index
+        # Row-wise: cutout sequence
+        # Column-wise: Prediction given required number of frames with signals
+        # Number of columns is number of frames to require.
+        N_css = len(self._css)
+        N_test = N_css // self.N_folds
+        N_train = N_css - N_test
+        cop_train = np.zeros((N_train, N_frames.size, self.N_folds)).astype(bool)
+        cop_test = np.zeros((N_test, N_frames.size, self.N_folds)).astype(bool)
+
         # Matrix of accuracies
         # One row for each fold
         # Number of columns is number of frames to require.
@@ -1029,14 +1012,15 @@ class CVHelper(object):
         moa_test = np.zeros((self.N_folds, N_frames.size))
 
         # Experiment
+        labels = []
         z = zip(folds_train, folds_test, self._folds)
         for fold_ix, (train, test, data) in enumerate(z):
 
-            N_train = len(train)
-            N_test = len(test)
-
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
+
+            # Add the test labels for later
+            labels.append(test_l)
 
             # Create a matrix of predictions
             mop_train = np.zeros((N_train, N_frames.size)).astype(bool)
@@ -1052,6 +1036,9 @@ class CVHelper(object):
                 # is at least as large as the number of required frames,
                 # predict that it is an event.
                 mop_train[train_ix, :] = (N_frames <= N_signals)
+
+            # Save the matrix of predictions in the cube of predictions
+            cop_train[:, :, fold_ix] = mop_train
 
             # Vector of accuracies for given fold
             # Add it as a row in the matrix of accuracies.
@@ -1074,6 +1061,9 @@ class CVHelper(object):
                 # predict that it is an event.
                 mop_test[test_ix, :] = (N_frames <= N_signals)
 
+            # Save the matrix of predictions in the cube of predictions
+            cop_test[:, :, fold_ix] = mop_test
+
             # Vector of accuracies for given fold
             # Add it as a row in the matrix of accuracies.
             moa_test[fold_ix, :] = (
@@ -1085,6 +1075,8 @@ class CVHelper(object):
                 / N_test)
 
         # Save the accuracies
+        # -------------------
+
         folds_ix = np.arange(self.N_folds) + 1
 
         # Train
@@ -1101,8 +1093,76 @@ class CVHelper(object):
         df = pd.DataFrame(data=moa_test, index=folds_ix, columns=N_frames)
         df.to_csv(ofname_test, index=True, header=True)
 
+        # Report some numbers
+        # -------------------
+
+        # Number of frames giving highest accuracy
+        train_acc_max = moa_train.max(axis=1)
+        train_acc_max_ix = np.argmax(moa_train == train_acc_max[:, None], axis=1)
+        # N_frames_best = N_frames[train_acc_max_ix]
+
+        # I need a confusion matrix for each fold
+        # For that I need a prediction vector for each test fold
+        # To make it, I need the best choice of number of frames to
+        # require for each fold and then get the predictions given this choice.
+
+        # The best-number-of-frames index is along the columns in the cube of predictions,
+        # So this is a different form when I obtain the predictions in the previous experiment.
+        # For each fold, I take the number-of-frames-required index of the best-accuracy
+        # and grab the vector along the rows at cop_test[:, N_frames_ix, fold_ix]
+        # and calculate the confusion matrix given the labels of the test set
+        predictions = []
+        for fold_ix in range(self.N_folds):
+
+            N_frames_ix = train_acc_max_ix[fold_ix]
+            predictions.append(cop_test[:, N_frames_ix, fold_ix])
+
+        display_table_of_confusion(predictions, labels)
+
 
     # -- END class CVHelper --
+
+def display_table_of_confusion(predictions, labels):
+
+    # Get cube of confusion matrices
+    classes = np.array([True, False])
+    coc = confusion_cube(predictions, labels, classes)
+    print 'coc.shape =', coc.shape
+    # print 'coc[:, :, 0]:'
+    # print coc[:, :, 0]
+
+    # print labels[0]
+    # print predictions[0]
+    # raise SystemExit
+
+    mean = coc.mean(axis=2)
+    std = coc.std(axis=2)
+    err = std / np.sqrt(coc.shape[2])
+
+    # count_vector contains total number of entries in each fold
+    count_vector = coc.sum(axis=0).sum(axis=0).astype(float)
+
+    # Divide by total number of entries for given fold to get accuracy
+    #   Assuming here that the class of interest is the one indexed
+    #   first along the rows and columns of the confusion matrix,
+    #   i.e. the class SN.
+    acc_vector = (coc[0, 0, :] + coc[1, 1, :]) / count_vector
+    acc_mean = acc_vector.mean()
+    acc_std = acc_vector.std()
+    acc_err = acc_std / np.sqrt(coc.shape[2])
+
+    # Print all results
+    print '\nClass order in confusion matrix:', list(classes)
+
+    print '\nMean table of confusion:'
+    print mean
+    print '\nStandard deviation:'
+    print std
+    print '\nStandard error:'
+    print err
+
+    print '\nMean accuracy (TP + TN):', acc_mean,
+    print '+-', acc_err, '(std = {})'.format(acc_std)
 
 
 def max_indices(arr):
