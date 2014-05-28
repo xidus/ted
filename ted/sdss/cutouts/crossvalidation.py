@@ -886,6 +886,10 @@ class CVHelper(object):
         # colors = mpl.rcParams.get('axes.color_cycle')
 
         # pkw = dict(lw=3, c=colors[0])
+        inkw = dict(ls='none', marker='.', ms=5, mec='none', c='k')
+        # Make the point visible outside the axes extent,
+        # and put it on top of everythin else in the axes instance
+        inkw.update(clip_on=False, zorder=100)
         # bboxkw = dict(facecolor='#efefef', edgecolor='#cccccc', pad=10.0)
         # bboxkw = dict()
         bboxkw = dict(facecolor='w', alpha=.8)
@@ -969,7 +973,7 @@ class CVHelper(object):
             b = ax.get_position().ymin + .015
             rect = [l, b, w, h]
             axin = fig.add_axes(rect)
-            axin.plot([tau], [sigma], ls='none', marker='.', ms=5, mec='none', c='k')
+            axin.plot([tau], [sigma], **inkw)
             # axin.set_ylabel(rmath(r'\sigma'))
             # axin.set_xlabel(rmath(r'\tau'))
             axin.set_ylim(*self.xp.sigmas[[0, -1]])
