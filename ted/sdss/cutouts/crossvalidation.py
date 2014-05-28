@@ -885,6 +885,15 @@ class CVHelper(object):
 
         # colors = mpl.rcParams.get('axes.color_cycle')
 
+        # pkw = dict(lw=3, c=colors[0])
+        # bboxkw = dict(facecolor='#efefef', edgecolor='#cccccc', pad=10.0)
+        # bboxkw = dict()
+        bboxkw = dict(facecolor='w', alpha=.8)
+        tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
+        fstr1 = r'\sigma = {:.2f}'
+        fstr2 = r'\tau = {:.2f}'
+        # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
+
         # Accuracies
         # ----------
 
@@ -892,59 +901,54 @@ class CVHelper(object):
         fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
         fig, axes = plt.subplots(N_folds, 1, **fkw)
 
-        # pkw = dict(lw=3, c=colors[0])
-        # bboxkw = dict(facecolor='#e6e6e6', edgecolor='#cccccc', pad=10.0)
-        # tkw = dict(fontsize=15, ha='left', va='bottom', bbox=bboxkw)
-
-        # fstr = r'Fold {}: \sigma = {:.2f}, \tau = {:.2f}'
-        # fstr = r'\sigma = {:.2f}, \tau = {:.2f}'
-
         # OR
 
         # Figure proportions
-        figsize = fig.get_size_inches()
-        fig_w2h = float(figsize[0]) / figsize[1]
+        # figsize = fig.get_size_inches()
+        # fig_w2h = float(figsize[0]) / figsize[1]
         # (left, bottom, width, height)
-        extent = [.02, .15, .25 / fig_w2h , .25]
+        # extent = [.02, .15, .25 / fig_w2h, .25]
+        # w = .25
+        # h = .25
+        # w, h = .25, .25
+        # yoffsets = np.linspace(0, 1, self.N_folds + 3)[2:-1]
+        # extents = [[.11, yoff + .02, w, h] for yoff in yoffsets]
 
         # Plot data on eaxh axis
+        insert_data = []
         for fold_ix, ax in enumerate(axes.flat):
 
             if fold_ix == 0:
                 ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=15)
-
-            # Display the values of \sigma and \tau
-
-            fnum = fold_ix + 1
-            sigma_ix, tau_ix = centroids[fold_ix]
-            sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
-            # s = rmath(fstr.format(sigma, tau))
-            # ax.text(.015, .15, s, transform=ax.transAxes, **tkw)
-
-            # OR add insert plot
-
-            axin = fig.add_axes(extent, axisbg='#eeeeee', transform=ax.transAxes)
-            # axin.axhline(y=0, lw=.5, c='k')
-            axin.plot([sigma], [tau], ls='none', marker='o', ms=5, mec='none', c='k')
-            # axin.set_title(rmath('Profile'), fontsize=5)
-            axin.xaxis.set_ticks_position('top')
-            axin.set_ylabel(rmath('\sigma'), fontsize=4)
-            axin.set_xlabel(rmath('\tau'), fontsize=4)
-            axin.set_ylim(*self.xp.sigmas[[0, -1]])
-            axin.set_xlim(*self.xp.taus[[0, -1]])
-            axin.set_xticks([])
-            axin.set_yticks([])
 
             # Add the accuracy lines
 
             # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
             ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
             ax.plot(N_frames, moa_test.values[fold_ix, :], label=rmath('Test'))
+            # print ax.bbox
+
+            # Display the values of \sigma and \tau
+
+            fnum = fold_ix + 1
+            sigma_ix, tau_ix = centroids[fold_ix]
+            sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
+
+            # Save handles and data until after tightening the figure layout
+            insert_data.append((ax, sigma, tau))
+
+            # Write data out immediately
+            s1 = rmath(fstr1.format(sigma))
+            s2 = rmath(fstr2.format(tau))
+            # s = '{}\n\{}'.format(s1, s2)
+            # s = rmath(fstr.format(sigma, tau))
+            # y = ax.get_position().ymin + .01
+            ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
+            ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
 
             ax.legend(ncol=2)
-
-            ax.set_ylabel(rmath('Accuracy'))
             ax2 = ax.twinx()
+            ax.set_ylabel(rmath('Accuracy'))
             ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
 
             # ax.set_yticks([.0, .5, 1.])
@@ -955,6 +959,24 @@ class CVHelper(object):
         # ax.set_ylim(.0, 1.)
 
         fig.tight_layout()
+
+        # Add insert axes (after the change in fig.transFigure from calling fig.tight_layout())
+        fig_w, fig_h = fig.get_size_inches()
+        fig_w2h = float(fig_w) / fig_h
+        sz = .035
+        l, w, h = .85, sz, sz * fig_w2h
+        for ax, sigma, tau in insert_data:
+            b = ax.get_position().ymin + .015
+            rect = [l, b, w, h]
+            axin = fig.add_axes(rect)
+            axin.plot([tau], [sigma], ls='none', marker='.', ms=5, mec='none', c='k')
+            # axin.set_ylabel(rmath(r'\sigma'))
+            # axin.set_xlabel(rmath(r'\tau'))
+            axin.set_ylim(*self.xp.sigmas[[0, -1]])
+            axin.set_xlim(*self.xp.taus[[0, -1]])
+            axin.set_xticks([])
+            axin.set_yticks([])
+
         fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
