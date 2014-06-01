@@ -886,10 +886,10 @@ class CVHelper(object):
         # Plot settings
         # -------------
 
-        # colors = mpl.rcParams.get('axes.color_cycle')
+        colors = mpl.rcParams.get('axes.color_cycle')
 
         # pkw = dict(lw=3, c=colors[0])
-        inkw = dict(ls='none', marker='.', ms=5, mec='none', c='k')
+        inkw = dict(ls='none', marker='.', ms=8, mec='none', c=colors[4])
         # Make the point visible outside the axes extent,
         # and put it on top of everythin else in the axes instance
         inkw.update(clip_on=False, zorder=100)
@@ -899,6 +899,7 @@ class CVHelper(object):
         tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
         fstr1 = r'\sigma = {:.2f}'
         fstr2 = r'\tau = {:.2f}'
+        fstr3 = r'\nu = {: >2d}'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
 
         # Accuracies
@@ -920,7 +921,9 @@ class CVHelper(object):
             # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
             ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
             ax.plot(N_frames, moa_test.values[fold_ix, :], label=rmath('Test'))
-            ax.axvline(x=train_acc_max_ix[fold_ix], c='k', label=rmath('Best No. of frames'))
+            N_frames_best = train_acc_max_ix[fold_ix]
+            s3 = fstr3.format(N_frames_best)
+            ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
             # print ax.bbox
 
             # Display the values of \sigma and \tau
@@ -949,7 +952,7 @@ class CVHelper(object):
             # ax.set_yticks([.0, .5, 1.])
             ax2.set_yticks([])
 
-        ax.set_xlabel(rmath('Required number of frames with a signal'))
+        ax.set_xlabel(rmath(r'\nu / Minimum required number of frames with a signal'))
         ax.set_xlim(np.min(N_frames), np.max(N_frames))
         # ax.set_ylim(.0, 1.)
 
