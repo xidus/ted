@@ -863,6 +863,9 @@ class CVHelper(object):
         ifname_train = os.path.join(self._opath, fname_train)
         moa_train = pd.read_csv(ifname_train, index_col=[0])
 
+        # Number of frames required at the chosen maximum
+        train_acc_max_ix = np.argmax(moa_train.values, axis=1)
+
         # Test
         fname_test = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='test'))
         ifname_test = os.path.join(self._opath, fname_test)
@@ -905,19 +908,6 @@ class CVHelper(object):
         fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
         fig, axes = plt.subplots(N_folds, 1, **fkw)
 
-        # OR
-
-        # Figure proportions
-        # figsize = fig.get_size_inches()
-        # fig_w2h = float(figsize[0]) / figsize[1]
-        # (left, bottom, width, height)
-        # extent = [.02, .15, .25 / fig_w2h, .25]
-        # w = .25
-        # h = .25
-        # w, h = .25, .25
-        # yoffsets = np.linspace(0, 1, self.N_folds + 3)[2:-1]
-        # extents = [[.11, yoff + .02, w, h] for yoff in yoffsets]
-
         # Plot data on eaxh axis
         insert_data = []
         for fold_ix, ax in enumerate(axes.flat):
@@ -930,6 +920,7 @@ class CVHelper(object):
             # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
             ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
             ax.plot(N_frames, moa_test.values[fold_ix, :], label=rmath('Test'))
+            ax.axvline(x=train_acc_max_ix[fold_ix], c='k', label=rmath('Best No. of frames'))
             # print ax.bbox
 
             # Display the values of \sigma and \tau
@@ -950,7 +941,7 @@ class CVHelper(object):
             ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
             ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
 
-            ax.legend(ncol=2)
+            ax.legend(ncol=3)
             ax2 = ax.twinx()
             ax.set_ylabel(rmath('Accuracy'))
             ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
@@ -971,8 +962,7 @@ class CVHelper(object):
         l, w, h = .85, sz, sz * fig_w2h
         for ax, sigma, tau in insert_data:
             b = ax.get_position().ymin + .015
-            rect = [l, b, w, h]
-            axin = fig.add_axes(rect)
+            axin = fig.add_axes([l, b, w, h])
             axin.plot([tau], [sigma], **inkw)
             # axin.set_ylabel(rmath(r'\sigma'))
             # axin.set_xlabel(rmath(r'\tau'))
@@ -1041,23 +1031,26 @@ class CVHelper(object):
         folds_test = self._load_results_signals(ftype='test')
 
         N_max_frames = np.min([len(cs) for cs in self._css])
-        print 'Maximum number of needed frames required:', N_max_frames
+        print 'Maximum number of needed frames required (using all quality combinations):', N_max_frames
 
         # Include zero (always yes) and the max number of frames
         N_frames = np.arange(0, N_max_frames + 1)
 
-        # Cube of predictions
-        # Depth-wise: fold index
-        # Row-wise: cutout sequence
-        # Column-wise: Prediction given required number of frames with signals
-        # Number of columns is number of frames to require.
+        # Cube of predictions (USED TO CALCULATE THE TABLE OF CONFUSION)
+        #  Depth-wise: fold index
+        #  Row-wise: cutout sequence
+        #  Column-wise: Prediction given required number of frames with signals
+        #  Number of columns is number of frames to require.
         N_css = len(self._css)
         N_test = N_css // self.N_folds
         N_train = N_css - N_test
+        print 'N_train', N_train
+        print 'N_test', N_test
+        print 'N_train + N_test', N_train + N_test
         cop_train = np.zeros((N_train, N_frames.size, self.N_folds)).astype(bool)
         cop_test = np.zeros((N_test, N_frames.size, self.N_folds)).astype(bool)
 
-        # Matrix of accuracies
+        # Matrix of accuracies (Saved for later and used for plotting)
         # One row for each fold
         # Number of columns is number of frames to require.
         moa_train = np.zeros((self.N_folds, N_frames.size))
@@ -1148,10 +1141,25 @@ class CVHelper(object):
         # Report some numbers
         # -------------------
 
-        # Number of frames giving highest accuracy
-        train_acc_max = moa_train.max(axis=1)
-        train_acc_max_ix = np.argmax(moa_train == train_acc_max[:, None], axis=1)
-        # N_frames_best = N_frames[train_acc_max_ix]
+        # Number of frames giving highest accuracy for each fold
+
+        if 0:
+            # Get the maximum accuracy for each fold.
+            train_acc_max = moa_train.max(axis=1)
+
+            # Given the maximum accuracy in each fold,
+            train_acc_max_ix = np.argmax(moa_train == train_acc_max[:, None], axis=1)
+
+        else:
+            # This yields the same result
+            train_acc_max_ix = np.argmax(moa_train, axis=1)
+
+        # Print out the maximum accuracy of the training and the number of frames required to get it.
+        print 'TRAINING:'
+        print '\n'.join([
+            ' Fold {:d}: Best acc.: {7.5f}; N frames: {:d}'.format(
+                fix, moa_train[fix, Nix], Nix) for fix, Nix in enumerate(
+                    train_acc_max_ix)])
 
         # I need a confusion matrix for each fold
         # For that I need a prediction vector for each test fold
@@ -1159,10 +1167,12 @@ class CVHelper(object):
         # require for each fold and then get the predictions given this choice.
 
         # The best-number-of-frames index is along the columns in the cube of predictions,
-        # So this is a different form when I obtain the predictions in the previous experiment.
-        # For each fold, I take the number-of-frames-required index of the best-accuracy
-        # and grab the vector along the rows at cop_test[:, N_frames_ix, fold_ix]
+        # (So this is a different form when I obtain the predictions in the previous experiment.)
+        # For each fold (fold_ix), I take the best-accuracy index (N_frames_ux) at which the number of required signal frames have the highest accuracy
+        # and grab the prediction vector cop_test[:, N_frames_ix, fold_ix] (i.e. along the rows of the cop)
         # and calculate the confusion matrix given the labels of the test set
+
+        # Prepare input for `display_table_of_confusion`.
         predictions = []
         for fold_ix in range(self.N_folds):
 
