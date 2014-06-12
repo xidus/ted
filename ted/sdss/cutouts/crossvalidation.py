@@ -147,11 +147,19 @@ class CVHelper(object):
                 print '_cv_any:', e.message
                 print '_cv_any:', '-' * 50, '\n'
 
+    # ANY2
+
+    def _cv_any2(self): self._cv_any()
+
     # BASELINE
 
     def _cv_blr(self): self._cv_baseline()
     def _cv_bla(self): self._cv_baseline()
     def _cv_bln(self): self._cv_baseline()
+
+    def _cv_blr2(self): self._cv_baseline()
+    def _cv_bla2(self): self._cv_baseline()
+    def _cv_bln2(self): self._cv_baseline()
 
     def _cv_baseline(self):
         for n, data in enumerate(self._folds):
@@ -161,12 +169,12 @@ class CVHelper(object):
             (train_f, train_l), (test_f, test_l) = data
 
             # Training set
-            cop = self._cop_blr(train_f)
+            cop = self._cop_baseline(train_f)
             moa = self._moa(cop, train_l)
             self._save_fold_results_moa(moa=moa, ftype='train', fnum=fnum)
 
             # Test set
-            cop = self._cop_blr(test_f)
+            cop = self._cop_baseline(test_f)
             moa = self._moa(cop, test_l)
             self._save_fold_results_moa(moa=moa, ftype='test', fnum=fnum)
 
@@ -259,17 +267,17 @@ class CVHelper(object):
 
     # BASELINE
 
-    def _cop_blr(self, features):
-        """Return CoP for baseline-experiment RANDOM (BLR)"""
-        return self._cop_baseline(features)
+    # def _cop_blr(self, features):
+    #     """Return CoP for baseline-experiment RANDOM (BLR)"""
+    #     return self._cop_baseline(features)
 
-    def _cop_bla(self, features):
-        """Return CoP for baseline-experiment ALWAYS (BLA)"""
-        return self._cop_baseline(features)
+    # def _cop_bla(self, features):
+    #     """Return CoP for baseline-experiment ALWAYS (BLA)"""
+    #     return self._cop_baseline(features)
 
-    def _cop_bln(self, features):
-        """Return CoP for baseline-experiment NEVER (BLN)"""
-        return self._cop_baseline(features)
+    # def _cop_bln(self, features):
+    #     """Return CoP for baseline-experiment NEVER (BLN)"""
+    #     return self._cop_baseline(features)
 
     def _cop_baseline(self, features):
         """Return CoP for baseline experiment"""
@@ -543,9 +551,15 @@ class CVHelper(object):
         getattr(self, '_plot_results_' + self.xp.name)()
 
     def _plot_results_any(self): self._plot_results_accuracies()
+    def _plot_results_any2(self): self._plot_results_accuracies()
+
     def _plot_results_blr(self): self._plot_results_accuracies()
     def _plot_results_bla(self): self._plot_results_accuracies()
     def _plot_results_bln(self): self._plot_results_accuracies()
+
+    def _plot_results_blr2(self): self._plot_results_accuracies()
+    def _plot_results_bla2(self): self._plot_results_accuracies()
+    def _plot_results_bln2(self): self._plot_results_accuracies()
 
     def _plot_results_accuracies(self):
         """Plot results for experiment ANY and BASELINE experiments"""
@@ -987,10 +1001,15 @@ class CVHelper(object):
         getattr(self, '_analyse_' + self.xp.name)()
 
     def _analyse_any(self): self._analyse_simple()
+    def _analyse_any2(self): self._analyse_simple()
 
     def _analyse_blr(self): self._analyse_simple() # baseline()
     def _analyse_bla(self): self._analyse_simple() # baseline()
     def _analyse_bln(self): self._analyse_simple() # baseline()
+
+    def _analyse_blr2(self): self._analyse_simple() # baseline()
+    def _analyse_bla2(self): self._analyse_simple() # baseline()
+    def _analyse_bln2(self): self._analyse_simple() # baseline()
 
     def _analyse_baseline(self):
         """Analyse results for BASELINE experiment"""
