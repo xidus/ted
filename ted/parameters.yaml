@@ -49,7 +49,7 @@ cs:
 
 xp:
 
-  # The only experiment so far
+  # Experiment 1
   any:
 
     # Scale to smooth to
@@ -65,6 +65,23 @@ xp:
       start: .0
       stop: 1.
       num: 50
+
+  # Experiment 1 -- new grid on the bloc
+  any2:
+
+    # Scale to smooth to
+    # Type :: dict
+    sigmas: &sigmas2
+      start: 3
+      stop: 10
+      num: 8
+
+    # Relative thresholds
+    # Type :: dict
+    taus: &taus2
+      start: .0
+      stop: 1.
+      num: 21
 
   # The expanded experiment
   many:
