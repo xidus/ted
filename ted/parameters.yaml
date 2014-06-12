@@ -107,3 +107,21 @@ xp:
   bln:
     sigmas: *sigmas
     taus: *taus
+
+  # BASELINE EXPERIMENT -- new grid on the bloc
+  # -------------------
+
+  # RANDOM 2
+  blr2:
+    sigmas: *sigmas2
+    taus: *taus2
+
+  # ALWAYS 2
+  bla2:
+    sigmas: *sigmas2
+    taus: *taus2
+
+  # NEVER 2
+  bln2:
+    sigmas: *sigmas2
+    taus: *taus2
