@@ -1630,6 +1630,10 @@ wcsremap \
         self.save_predictions(predictions)
         return predictions
 
+    def gridsearch_blr2(self, sigmas, taus): self.gridsearch_blr(sigmas, taus)
+    def gridsearch_bla2(self, sigmas, taus): self.gridsearch_bla(sigmas, taus)
+    def gridsearch_bln2(self, sigmas, taus): self.gridsearch_bln(sigmas, taus)
+
     def save_predictions(self, predictions):
         """Save matrix of predictions from grid-search run to self._fname_gsp"""
         df = pd.DataFrame(data=predictions)
