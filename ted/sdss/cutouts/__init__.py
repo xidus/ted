@@ -1586,6 +1586,8 @@ wcsremap \
 
         return predictions
 
+    def gridsearch_any2(self, sigmas, taus): self.gridsearch_any(sigmas, taus)
+
     def gridsearch_many(self, sigmas, taus, max_len=None):
         """Run grid search for experiment 'MANY'"""
 
@@ -1745,8 +1747,11 @@ wcsremap \
         Create a report of the cutouts in the given instance.
 
         """
+        # plot_background_models(self)
         for i in self.sigix:
             plot_LoG_samples(self, offset=i)
+            plot_residual_samples(self, offset=i)
+            plot_binary_fields(self, offset=i)
 
     def __len__(self):
         if 'files' in dir(self):
