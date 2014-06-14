@@ -622,7 +622,7 @@ class CVHelper(object):
 
         """
         Calculate the locations of the assumed best accuracies
-        This is the centre-of-mass/centroid for each set of
+        This is the CENTRE-OF-MASS (COM)/CENTROID for each set of
         entries with the maximum value.
         """
 
@@ -675,7 +675,11 @@ class CVHelper(object):
         moaskw = imkw.copy()
         moaskw.update(cmap=mpl.cm.coolwarm)
         # Accuracies can only be between 0 and 100 percent
-        moaskw.update(vmin=0, vmax=1)
+        # vmin = 0
+        # vmax = 1
+        vmin = .4
+        vmax = .6
+        moaskw.update(vmin=vmin, vmax=vmax)
 
         # Image settings for matrices of maximum-accuracy indices
         momaskw = imkw.copy()
@@ -689,24 +693,32 @@ class CVHelper(object):
         ncols = 5
         nrows = N_folds / ncols
         figh = [3.3, 5.7]
-        figsize = (15, figh[nrows - 1])
+        figsize = (13.5, figh[nrows - 1])
         fkw = dict(sharex=True, sharey=True, figsize=figsize)
         # fkw = dict(figsize=(15, 6.5))
 
         # Figure-adjustement settings
         figb = [.15, .15]
-        adjustkw = dict(left=.03, bottom=figb[nrows - 1], top=.95, right=.95)
+        adjustkw = dict(left=.03, bottom=figb[nrows - 1], top=.82, right=.95)
         adjustkw.update(wspace=.10, hspace=.10)
 
         # Colorbar settings
         cbkw = dict(extend='neither', drawedges=False)
-        cbkw.update(ticks=np.linspace(.0, 1., 3))
+        # cbkw.update(ticks=np.linspace(.0, 1., 3))
+        cbkw.update(ticks=np.linspace(vmin, vmax, 3))
         cbkw.update(orientation='vertical')
         # rect = [left, bottom, width, height]
         # crect = [0.96, 0.52, 0.01, 0.43]
         rect_b = adjustkw['bottom']
         rect_h = adjustkw['top'] - adjustkw['bottom']
         crect = [0.96, rect_b, 0.01, rect_h]
+
+        # Default title for all plots
+        qtit = rmath('Quality combination: {}'.format(qstr))
+        titkw = dict(fontsize=18)
+
+        # Labels
+        lblkw = dict(fontsize=15)
 
         # Accuracies
         # ----------
@@ -716,11 +728,18 @@ class CVHelper(object):
         # Create the figure and axes
         fig, axes = plt.subplots(nrows, ncols, **fkw)
 
+        # axes.flat[ncols / 2].set_title(qtit, **titkw)
+        fig.suptitle(qtit, **titkw)
+
         # Plot data on eaxh axis
         for i, ax in enumerate(axes.flat):
             im = ax.imshow(coa_train[:, :, i], **moaskw)
+            ax2 = ax.twiny()
+            ax2.set_xticks([])
+            ax2.set_xlabel(rmath('Fold {:d}'.format(i + 1)), **lblkw)
 
         scl_kw = dict(l=r'$\sigma$', b=r'$\tau$', bticks=[.0, .5, 1.])
+        scl_kw.update(lblkw=lblkw)
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks([.0, .5, 1.])
 
@@ -730,7 +749,6 @@ class CVHelper(object):
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
-        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
         fname = 'moa_E-{}_Q-{}_CV-{}_train_folds.pdf'.format(
             self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
@@ -743,10 +761,16 @@ class CVHelper(object):
         # Create the figure and axes
         fig, axes = plt.subplots(nrows, ncols, **fkw)
 
+        # axes.flat[ncols / 2].set_title(qtit, **titkw)
+        fig.suptitle(qtit, **titkw)
+
         # Plot data on eaxh axis
         for i, ax in enumerate(axes.flat):
             # Show the locations of all entries having the maximum accuracy
             ax.imshow(momas_train[:, :, i], **momaskw)
+            ax2 = ax.twiny()
+            ax2.set_xticks([])
+            ax2.set_xlabel(rmath('Fold {:d}'.format(i + 1)), **lblkw)
 
             # Plot a red color for the location of the centre-of-mass
             # of the maximum accuracy indices.
@@ -755,8 +779,8 @@ class CVHelper(object):
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks([.0, .5, 1.])
 
-        fig.tight_layout()
-        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
         fname = 'moa_E-{}_Q-{}_CV-{}_train_best.pdf'.format(
             self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
@@ -768,9 +792,15 @@ class CVHelper(object):
         # Create the figure and axes
         fig, axes = plt.subplots(nrows, ncols, **fkw)
 
+        # axes.flat[ncols / 2].set_title(qtit, **titkw)
+        fig.suptitle(qtit, **titkw)
+
         # Plot data on eaxh axis
         for i, ax in enumerate(axes.flat):
             im = ax.imshow(coa_test[:, :, i], **moaskw)
+            ax2 = ax.twiny()
+            ax2.set_xticks([])
+            ax2.set_xlabel(rmath('Fold {:d}'.format(i + 1)), **lblkw)
 
         # Set the x label on the bottom-most axes only
         for ax in axes.flat[-ncols:]:
@@ -787,7 +817,6 @@ class CVHelper(object):
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
-        fig.suptitle(rmath('Test - Q = [{}]'.format(qstr)))
         fname = 'moa_E-{}_Q-{}_CV-{}_test_folds.pdf'.format(
             self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
@@ -799,10 +828,16 @@ class CVHelper(object):
         # Create the figure and axes
         fig, axes = plt.subplots(nrows, ncols, **fkw)
 
+        # axes.flat[ncols / 2].set_title(qtit, **titkw)
+        fig.suptitle(qtit, **titkw)
+
         # Plot data on eaxh axis
         for i, ax in enumerate(axes.flat):
             # Show the locations of all entries having the maximum accuracy
             ax.imshow(momas_test[:, :, i], **momaskw)
+            ax2 = ax.twiny()
+            ax2.set_xticks([])
+            ax2.set_xlabel(rmath('Fold {:d}'.format(i + 1)), **lblkw)
 
             # Plot a red color for the location of the centre-of-mass
             # of the maximum accuracy indices.
@@ -811,8 +846,8 @@ class CVHelper(object):
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks([.0, .5, 1.])
 
-        fig.tight_layout()
-        fig.suptitle(rmath('Train - Q = [{}]'.format(qstr)))
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
         fname = 'moa_E-{}_Q-{}_CV-{}_test_best.pdf'.format(
             self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
@@ -928,7 +963,7 @@ class CVHelper(object):
         for fold_ix, ax in enumerate(axes.flat):
 
             if fold_ix == 0:
-                ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=15)
+                ax.set_title(qtit, **titkw)
 
             # Add the accuracy lines
 
@@ -1298,17 +1333,18 @@ def get_centroid_stack(centroids, shape, fill=np.nan):
     return coms
 
 
-def set_common_labels(axes, ncols, l=None, b=None, lticks=None, bticks=None):
+def set_common_labels(axes, ncols, l=None, b=None, lticks=None, bticks=None,
+    lblkw={}):
 
     if b is not None:
         # Set the x label on the bottom-most axes
         for ax in axes.flat[-ncols:]:
-            ax.set_xlabel(b)
+            ax.set_xlabel(b, **lblkw)
 
     if l is not None:
         # Set the y label on the left-most axes
         for ax in axes.flat[::ncols]:
-            ax.set_ylabel(l)
+            ax.set_ylabel(l, **lblkw)
 
 
 def load_parameters(ifname=env.files.get('params')):
