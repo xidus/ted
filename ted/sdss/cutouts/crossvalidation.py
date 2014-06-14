@@ -888,6 +888,15 @@ class CVHelper(object):
         # N_frames = moa_train.columns.astype(int)
         N_frames = np.arange(0, moa_train.shape[1])
 
+        # Get the maximum number of frames that can
+        # be required when using this quality
+        cs_frame_count = np.zeros(self._css.size).astype(int)
+        for cs_ix, cs in enumerate(self._css):
+            cs.set_quality(self.quality)
+            cs.calibrate()
+            cs_frame_count[cs_ix] = len(cs)
+        N_max_frames = np.min(cs_frame_count)
+
         # Get CV information
         N_folds = self.N_folds
         # Get experiment information
@@ -912,8 +921,10 @@ class CVHelper(object):
         tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
         fstr1 = r'\sigma = {:.2f}'
         fstr2 = r'\tau = {:.2f}'
-        fstr3 = r'\nu = {: >2d}'
+        fstr3 = r'Train max (\nu = {: >2d})'
+        fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
+        s4 = fstr4.format(N_max_frames)
 
         # Labels
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
@@ -940,6 +951,7 @@ class CVHelper(object):
             N_frames_best = train_acc_max_ix[fold_ix]
             s3 = fstr3.format(N_frames_best)
             ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
+            ax.axvline(x=N_max_frames, c='r', label=rmath(s4))
             # print ax.bbox
 
             # Display the values of \sigma and \tau
