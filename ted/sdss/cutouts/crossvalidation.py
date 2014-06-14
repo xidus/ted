@@ -699,7 +699,7 @@ class CVHelper(object):
 
         # Figure-adjustement settings
         figb = [.15, .15]
-        adjustkw = dict(left=.03, bottom=figb[nrows - 1], top=.82, right=.95)
+        adjustkw = dict(left=.04, bottom=figb[nrows - 1], top=.82, right=.95)
         adjustkw.update(wspace=.10, hspace=.10)
 
         # Colorbar settings
