@@ -71,11 +71,15 @@ class CVHelper(object):
         xp.gskw = dict(exp=xp.name, **xpp)
         self.xp = xp
 
+    # QUALITY
+
     @property
     def quality(self):
         if not hasattr(self, '_quality'):
+            # Use the one specified in the parameter file
             return self._cs.get('quality')
         else:
+            # If it is set alreadt, use it.
             return self._quality
 
     def set_quality(self, quality):
@@ -90,6 +94,8 @@ class CVHelper(object):
     def qstr(self):
         return self._qstr(self.quality)
 
+    # FILENAMES
+
     @property
     def _fname_prediction(self):
         # return 'prediction_Q-{}.csv'.format(self.qstr)
@@ -103,8 +109,7 @@ class CVHelper(object):
     # ---------------
 
     @property
-    def _folds(self):
-        return get_folds(self._css, self._targets, self.N_folds)
+    def _folds(self): return get_folds(self._css, self._targets, self.N_folds)
 
     # Cross validation
     # ----------------
@@ -117,13 +122,14 @@ class CVHelper(object):
 
     def _cv_any(self):
         for n, data in enumerate(self._folds):
+
             # Fold number
             fnum = n + 1
+
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
-            try:
-                # raise Exception
 
+            try:
                 # Training set
                 cop = self._cop_any(train_f)
                 moa = self._moa(cop, train_l)
@@ -135,8 +141,6 @@ class CVHelper(object):
                 print '_cv_any:', '-' * 50, '\n'
 
             try:
-                # raise Exception
-
                 # Test set
                 cop = self._cop_any(test_f)
                 moa = self._moa(cop, test_l)
@@ -162,9 +166,12 @@ class CVHelper(object):
     def _cv_bln2(self): self._cv_baseline()
 
     def _cv_baseline(self):
+
         for n, data in enumerate(self._folds):
+
             # Fold number
             fnum = n + 1
+
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
 
@@ -181,19 +188,23 @@ class CVHelper(object):
     # MANY
 
     def _get_centroids(self):
-        cvh_any = CVHelper()
-        cvh_any.set_exp('any')
-        cvh_any.set_quality(self.quality)
-        return get_centroids(cvh_any._load_results(ftype='train'))
+        cvh = CVHelper()
+        cvh.set_exp('any')
+        # cvh.set_quality(self.quality)
+        cvh.set_quality([1])
+        return get_centroids(cvh._load_results(ftype='train'))
 
     def _cv_many(self):
         """
-        Get the maximum number of frames to require from any of the loaded cutout sequences.
-        Since they have different number of cutout frames, it must be the lowest number of frames
-        in a sequence that should be used as the largest number of frames to require to have a signal,
-        consecutive or not, in order to label the sequence an event.
+        Get the maximum number of frames to require from any of the
+        loaded cutout sequences. Since they have different number of
+        cutout frames, it must be the lowest number of frames in a
+        sequence that should be used as the largest number of frames
+        to require to have a signal, consecutive or not, in order to
+        label the sequence an event.
 
-        This number N i sused to create a matrix whose rows contain the result of one is the recorded number of signals in a frame
+        This number N is used to create a matrix whose rows contain
+        the result of one is the recorded number of signals in a frame
 
         """
 
@@ -243,53 +254,51 @@ class CVHelper(object):
     # ANY
 
     def _cop_any(self, features):
-        """Return result of training with experiment ANY"""
+        """
+        Returns
+        -------
+        cop : 3D numpy.ndarray
+            Predictions given each parameter combination (rows, cols)
+            and for each cutout frame in the cutout sequence (depthwise).
+
+        """
+
+        # Shape of the cube
         shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
+
         cop = np.zeros(shape).astype(bool)
-        for k, cs in enumerate(features):
+        for cs_ix, cs in enumerate(features):
+
+            # Set the unique file name for the predictions
             cs.set_fname_gsp(self._fname_prediction)
+
+            # If there is already a result, and it was made after the CV began,
+            # re-use it instead of re-calculating it.
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
-                cop[:, :, k] = cs.gs_prediction
+                cop[:, :, cs_ix] = cs.gs_prediction
+
             else:
-                # cs.load(**self._cs)
                 cs.load()
-                # print 'cs.quality:', cs.quality
                 cs.set_quality(self.quality)
-                # print 'cs.quality:', cs.quality
                 cs.calibrate()
-                # print 'cs.quality:', cs.quality
-                # raise SystemExit
                 cs.calculate_residuals()
-                cop[:, :, k] = cs.gridsearch(**self.xp.gskw)
+                cop[:, :, cs_ix] = cs.gridsearch(**self.xp.gskw)
                 cs.cleanup()
+
         return cop
 
     # BASELINE
-
-    # def _cop_blr(self, features):
-    #     """Return CoP for baseline-experiment RANDOM (BLR)"""
-    #     return self._cop_baseline(features)
-
-    # def _cop_bla(self, features):
-    #     """Return CoP for baseline-experiment ALWAYS (BLA)"""
-    #     return self._cop_baseline(features)
-
-    # def _cop_bln(self, features):
-    #     """Return CoP for baseline-experiment NEVER (BLN)"""
-    #     return self._cop_baseline(features)
 
     def _cop_baseline(self, features):
         """Return CoP for baseline experiment"""
         shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
         cop = np.zeros(shape).astype(bool)
-        for k, cs in enumerate(features):
+        for cs_ix, cs in enumerate(features):
             cs.set_fname_gsp(self._fname_prediction)
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time - 2 * 3600.:
-                cop[:, :, k] = cs.gs_prediction
+                cop[:, :, cs_ix] = cs.gs_prediction
             else:
-                cop[:, :, k] = cs.gridsearch(**self.xp.gskw)
+                cop[:, :, cs_ix] = cs.gridsearch(**self.xp.gskw)
         return cop
 
     # MANY
@@ -298,7 +307,6 @@ class CVHelper(object):
         """Return list of signal vectors for experiment MANY"""
         signals = []
         for k, cs in enumerate(features):
-            # fname = cs.set_fname_gsp(self._fname_signals)
             cs.set_fname_gsp(self._fname_signals)
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
                 print  '*' * 10 + ' Using previously saved data ' + '*' * 10
@@ -324,47 +332,6 @@ class CVHelper(object):
             .sum(axis=2).astype(float)
             # Divide by the number of training samples
             / labels.size)
-
-    # Single experiment
-    # -----------------
-
-    def _vector_of_predictions(self, features):
-        """Store result of testing with chosen experiment"""
-        return getattr(self, '_vop_' + self.xp)(features)
-
-    def _vop_any(self, features):
-        """Return result of testing with experiment ANY"""
-        vop = np.zeros(features.shape[0]).astype(bool)
-        for i, cs in enumerate(features):
-            # cs.load(**self._cs)
-            cs.load()
-            cs.set_quality(self.quality)
-            cs.calibrate()
-            cs.calculate_residuals()
-            vop[i] = cs.predict(**self._parkw)
-            cs.cleanup()
-        return vop
-
-    def _soa_any(self, vop, labels):
-        """Store test accuracy for experiment ANY.
-        A.k.a.: scalar of accuracy (soa)."""
-        return (vop == labels).sum().astype(float) / labels.size
-
-    # Single experiment-prediction kwargs
-    # -----------------------------------
-
-    @property
-    def _parkw(self):
-        """Property that holds the kwargs for a single experiment prediction"""
-        return getattr(self, '_parkw_' + self.xp.name)
-
-    @property
-    def _parkw_any(self, row_ix, col_ix):
-        """Prediction kwargs for experiment ANY"""
-        return dict(
-            exp=self.xp.name,
-            sigma=self.xp.sigmas[row_ix],
-            tau=self.xp.taus[col_ix])
 
     # Fold I/O
     # --------
@@ -412,32 +379,7 @@ class CVHelper(object):
             self._cs.get('bg_model'),
         )
 
-    # def _save_fold_results(self):
-    #     getattr(self, '_save_fold_results_' + self.xp.name)()
-
-    def _save_fold_results_moa(self, moa, ftype, fnum):
-        # fname = self._fn_fstr.format(**self._fn_kw(ftype=ftype, fnum=fnum))
-        fname = self._fn_fstr.format(*self._fn_kw(ftype=ftype, fnum=fnum))
-        # fname = self._fn_fstr.format(*self._fn_kw(rtype='moa', ftype=ftype, fnum=fnum))
-        ofname = os.path.join(self._opath, fname)
-        # print 'Saving fold results to:', ofname
-        print 'Saving fold results to:', fname
-        # print moa.shape
-        df = pd.DataFrame(data=moa, index=self.xp.sigmas, columns=self.xp.taus)
-        df.to_csv(ofname, index=True, header=True)
-        return ofname
-
-    def _save_fold_results_signals(self, signals, ftype, fnum):
-        fname = self._fn_fstr_many_signals.format(*self._fn_kw(ftype=ftype, fnum=fnum))
-        ofname = os.path.join(self._opath, fname)
-        print 'Saving fold results to:', fname
-        with open(ofname, 'w+') as fsock:
-            for signal_vector in signals:
-                fsock.write(','.join(signal_vector.astype(str)) + '\n')
-        return ofname
-
-    # Results I/O
-    # -----------
+    # FILENAME COMBINATIONS
 
     def _filenames(self, ftype):
         import itertools as it
@@ -469,6 +411,27 @@ class CVHelper(object):
             print ifname
             yield ifname
 
+    # SAVE
+
+    def _save_fold_results_moa(self, moa, ftype, fnum):
+        fname = self._fn_fstr.format(*self._fn_kw(ftype=ftype, fnum=fnum))
+        ofname = os.path.join(self._opath, fname)
+        print 'Saving fold results to:', fname
+        df = pd.DataFrame(data=moa, index=self.xp.sigmas, columns=self.xp.taus)
+        df.to_csv(ofname, index=True, header=True)
+        return ofname
+
+    def _save_fold_results_signals(self, signals, ftype, fnum):
+        fname = self._fn_fstr_many_signals.format(*self._fn_kw(ftype=ftype, fnum=fnum))
+        ofname = os.path.join(self._opath, fname)
+        print 'Saving fold results to:', fname
+        with open(ofname, 'w+') as fsock:
+            for signal_vector in signals:
+                fsock.write(','.join(signal_vector.astype(str)) + '\n')
+        return ofname
+
+    # LOAD
+
     def _load_results(self, ftype):
         """
         Based on given parameters and chosen experiment, load all
@@ -483,12 +446,10 @@ class CVHelper(object):
         # Cube of accuracies
         N_folds = self.N_folds
         coa = np.zeros((self.xp.N_sigmas, self.xp.N_taus, N_folds))
-        for i, ifname in enumerate(self._filenames(ftype)):
+        for fold_ix, ifname in enumerate(self._filenames(ftype)):
             df = pd.read_csv(ifname, index_col=[0])
-            coa[:, :, i] = df.values
+            coa[:, :, fold_ix] = df.values
         return coa
-
-    # --------------------------------------------------------------------------------------------------------------------------------------------------------
 
     def _load_results_signals(self, ftype):
         """
@@ -498,35 +459,37 @@ class CVHelper(object):
         Returns
         -------
         folds : list
-            list with as many entries as folds
-            each entry is a list of signal vectors,
-            one for each cutout sequence in the given fold.
+            List with as many entries as folds.
+            Each list entry is another list; this one containing signal
+            vectors; one for each cutout sequence in the given fold.
 
         """
         folds = []
-        for i, ifname in enumerate(self._filenames_signals(ftype)):
+        for ifname in self._filenames_signals(ftype):
             with open(ifname, 'r') as fsock:
                 folds.append(lines2intarrays(fsock.readlines()))
         return folds
 
     def _load_prediction_cubes(self, ftype=None):
         """
-        Return prediction cube for each fold and for each fold type.
+        Return prediction cube for each fold and given the fold type `ftype`.
         """
 
-        if ftype is None: return None
+        if ftype is None:
+            return
 
+        # Lists of cubes and labels (vectors) for those cubes
         cops = []
         labels = []
 
-        for n, data in enumerate(self._folds):
+        # Unpack training and test fold (f: features; l: labels)
+        for (train_f, train_l), (test_f, test_l) in self._folds:
 
-            # Unpack training and test fold (f: features; l: labels)
-            (train_f, train_l), (test_f, test_l) = data
-
+            # Use only the part of the data that is asked for.
             if ftype == 'test':
                 features = test_f
                 labels.append(test_l)
+
             elif ftype == 'train':
                 features = train_f
                 labels.append(train_l)
@@ -535,9 +498,9 @@ class CVHelper(object):
             shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
             cop = np.zeros(shape).astype(bool)
 
-            for k, cs in enumerate(features):
+            for cs_ix, cs in enumerate(features):
                 cs.set_fname_gsp(self._fname_prediction)
-                cop[:, :, k] = cs.gs_prediction
+                cop[:, :, cs_ix] = cs.gs_prediction
 
             cops.append(cop)
 
@@ -567,19 +530,18 @@ class CVHelper(object):
         # from scipy import stats
         import matplotlib as mpl
         # Select backend beforehand to make it run on the image servers
+        # Run anywhere, where matplotlib has already been loaded, this
+        # will produce a warning that the backend has already been chosen.
+        # Just ignore this.
         mpl.use('pdf')
         import matplotlib.pyplot as plt
 
         from mplconf import mplrc
         from mplconf import rmath
 
-        # Load data
-
+        # Load data (cube of accuracies (COA))
         coa_train = self._load_results(ftype='train')
         coa_test = self._load_results(ftype='test')
-
-        # print coa_train.shape
-        # raise SystemExit
 
         # Get CV information
         N_folds = self.N_folds
@@ -608,7 +570,7 @@ class CVHelper(object):
         # Prepare the data for plotting
         # -----------------------------
 
-        # Plot of every moa for each training fold
+        # Plot of every Matrix of Accuracy (MOA) for each training fold
         # Check: This is what is loaded directly from the files on disk.
 
         # On top of this plot, I need the locations of the best
@@ -617,6 +579,8 @@ class CVHelper(object):
 
         """True => accuracy for parameter-pair location is max."""
 
+        # Checked function `get_matrices_of_maximum_accuracy()` through
+        # on 2014-06-14, and it looked ok.
         momas_train = get_matrices_of_maximum_accuracy(coa_train)
         momas_test = get_matrices_of_maximum_accuracy(coa_test)
 
@@ -951,6 +915,9 @@ class CVHelper(object):
         fstr3 = r'\nu = {: >2d}'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
 
+        # Labels
+        xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
+
         # Accuracies
         # ----------
 
@@ -963,7 +930,7 @@ class CVHelper(object):
         for fold_ix, ax in enumerate(axes.flat):
 
             if fold_ix == 0:
-                ax.set_title(qtit, **titkw)
+                ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
 
             # Add the accuracy lines
 
@@ -1001,7 +968,7 @@ class CVHelper(object):
             # ax.set_yticks([.0, .5, 1.])
             ax2.set_yticks([])
 
-        ax.set_xlabel(rmath(r'\nu / Minimum required number of frames with a signal'))
+        ax.set_xlabel(xlabel)
         ax.set_xlim(np.min(N_frames), np.max(N_frames))
         # ax.set_ylim(.0, 1.)
 
@@ -1045,10 +1012,6 @@ class CVHelper(object):
     def _analyse_blr2(self): self._analyse_simple() # baseline()
     def _analyse_bla2(self): self._analyse_simple() # baseline()
     def _analyse_bln2(self): self._analyse_simple() # baseline()
-
-    def _analyse_baseline(self):
-        """Analyse results for BASELINE experiment"""
-        pass
 
     def _analyse_simple(self):
         """Analyse results any experiment"""
@@ -1238,8 +1201,8 @@ class CVHelper(object):
 
         display_table_of_confusion(predictions, labels)
 
-
     # -- END class CVHelper --
+
 
 def display_table_of_confusion(predictions, labels):
 
@@ -1317,8 +1280,8 @@ def centroid(indices_list):
 
 def get_centroids(cube):
     """Return list of centroids depth-wise for a data cube"""
-    return [centroid(max_indices(cube[:, :, i]))
-            for i in range(cube.shape[2])]
+    return [centroid(max_indices(cube[:, :, fold_ix]))
+            for fold_ix in range(cube.shape[2])]
 
 
 def get_centroid_stack(centroids, shape, fill=np.nan):
@@ -1333,7 +1296,9 @@ def get_centroid_stack(centroids, shape, fill=np.nan):
     return coms
 
 
-def set_common_labels(axes, ncols, l=None, b=None, lticks=None, bticks=None,
+def set_common_labels(axes, ncols,
+    l=None, b=None,
+    lticks=None, bticks=None,
     lblkw={}):
 
     if b is not None:
@@ -1453,15 +1418,6 @@ def lines2intarrays(lines):
     return list_
 
 
-def LoG_radius2sigma(radius):
-    if isinstance(radius, (int, float)):
-        return radius / np.sqrt(2.)
-    elif isinstance(radius, (list, np.ndarray)):
-        return np.array(radius) / np.sqrt(2.)
-    else:
-        raise TypeError('`radius` is neither array-like or a number.')
-
-
 # -----------------------------------------------------------------------------
 
 def table_of_confusion():
@@ -1561,16 +1517,3 @@ def plot(exp='any', quality=None):
     if quality is not None:
         cvh.set_quality(quality)
     cvh.plot()
-
-
-# def analyse_baseline(quality=None):
-#     """Analyse results of N-fold cross-validated grid search for BASELINE experiment."""
-#     cvh = CVHelper()
-#     if quality is not None:
-#         cvh.set_quality(quality)
-
-#     for exp in ('blr', 'bla', 'bln'):
-#         cvh.set_exp(exp)
-#         cvh.analyse()
-
-
