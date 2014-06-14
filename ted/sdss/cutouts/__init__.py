@@ -1569,17 +1569,17 @@ wcsremap \
         predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
 
         # Sigmas
-        for i, sigma in enumerate(sigmas):
+        for sigma_ix, sigma in enumerate(sigmas):
             # Set the scale of the objects that are looked for
             # No need to perform LoG every time I change between thresholds
             self.calculate_LoG(sigma=sigma)
             self.compare_neighbours()
 
             # Threshold values
-            for j, tau in enumerate(taus):
+            for tau_ix, tau in enumerate(taus):
                 self.threshold_intensities(tau=tau)
                 # Save the resulting prediction (bool)
-                predictions[i, j] = np.any(self.cube_threshold)
+                predictions[sigma_ix, tau_ix] = np.any(self.cube_threshold)
 
         # Save copy on disk
         self.save_predictions(predictions)
@@ -1587,30 +1587,6 @@ wcsremap \
         return predictions
 
     def gridsearch_any2(self, sigmas, taus): self.gridsearch_any(sigmas, taus)
-
-    def gridsearch_many(self, sigmas, taus, max_len=None):
-        """Run grid search for experiment 'MANY'"""
-
-         # Matrix of predictions (MoP)
-        predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
-
-        # Sigmas
-        for i, sigma in enumerate(sigmas):
-            # Set the scale of the objects that are looked for
-            # No need to perform LoG every time I change between thresholds
-            self.calculate_LoG(sigma=sigma)
-            self.compare_neighbours()
-
-            # Threshold values
-            for j, tau in enumerate(taus):
-                self.threshold_intensities(tau=tau)
-                # Save the resulting prediction (bool)
-                predictions[i, j] = np.any(self.cube_threshold)
-
-        # Save copy on disk
-        self.save_predictions(predictions)
-
-        return predictions
 
     def gridsearch_blr(self, sigmas, taus):
         """Baseline experiment using random predictions"""
