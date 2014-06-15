@@ -894,6 +894,7 @@ class CVHelper(object):
         # be required when using this quality
         cs_frame_count = np.zeros(self._css.size).astype(int)
         for cs_ix, cs in enumerate(self._css):
+            cs.load_cutoutsio_wrapper()
             cs.set_quality(self.quality)
             cs.calibrate()
             cs_frame_count[cs_ix] = len(cs)
