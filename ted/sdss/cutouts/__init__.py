@@ -1505,6 +1505,9 @@ wcsremap \
     # Service methods for the work-horse method `self.is_transient`
     # --------------------------------------------------------------
 
+    # Single prediction
+    # -----------------
+
     def predict(self, exp='any', **params):
         """Get prediction from running the given experiment once."""
         return getattr(self, 'experiment_' + exp)(**params)
@@ -1558,6 +1561,9 @@ wcsremap \
 
         return signals
 
+    # Grid search
+    # -----------
+
     def gridsearch(self, exp='any', **params):
         """Run grid search for given experiment"""
         return getattr(self, 'gridsearch_' + exp)(**params)
@@ -1610,6 +1616,9 @@ wcsremap \
     def gridsearch_bla2(self, sigmas, taus): self.gridsearch_bla(sigmas, taus)
     def gridsearch_bln2(self, sigmas, taus): self.gridsearch_bln(sigmas, taus)
 
+    # Grid search I/O
+    # ---------------
+
     def save_predictions(self, predictions):
         """Save matrix of predictions from grid-search run to self._fname_gsp"""
         df = pd.DataFrame(data=predictions)
@@ -1635,8 +1644,8 @@ wcsremap \
     def gs_prediction_time(self):
         return os.path.getmtime(self._fname_gsp)
 
-    # Methods for the experiments
-    # ---------------------------
+    # Scientific methods for the experiments
+    # --------------------------------------
 
     def calculate_LoG(self, sigma):
         """
@@ -1702,6 +1711,8 @@ wcsremap \
         """
         self.cube_threshold = threshold2Dstack(
             stack=self.cube_remap, stack_locs=self.cube_minima_locs, tau=tau)
+
+    # END Scientific methods for the experiments
 
     @property
     def sigix(self):

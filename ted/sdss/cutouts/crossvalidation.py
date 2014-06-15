@@ -61,6 +61,7 @@ class CVHelper(object):
 
     # def _set_exp_any(self):
     #     xpp = dict2numpy(self._xp.get('any'))
+        # xpp contains the parameter grid alone.
         xpp = dict2numpy(self._xp.get(key))
         xp = Namespace()
         xp.name = key
@@ -102,8 +103,9 @@ class CVHelper(object):
         return 'prediction-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
 
     @property
-    def _fname_signals(self):
-        return 'signals-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
+    def _fname_signals(self, sigma, tau):
+        fstr = 'signals-E-{}_Q-{}_S-{:.2f}_T-{:.2f}.csv'
+        return fstr.format(self.xp.name, self.qstr, sigma, tau)
 
     # Fold management
     # ---------------
@@ -307,7 +309,7 @@ class CVHelper(object):
         """Return list of signal vectors for experiment MANY"""
         signals = []
         for k, cs in enumerate(features):
-            cs.set_fname_gsp(self._fname_signals)
+            cs.set_fname_gsp(self._fname_signals(**params))
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
                 print  '*' * 10 + ' Using previously saved data ' + '*' * 10
                 signals.append(cs.gs_prediction.flatten())
