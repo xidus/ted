@@ -40,6 +40,8 @@ class CVHelper(object):
         self._css, self._targets = load_cutout_sequences()
 
     def _set_cs_parameters(self):
+        """Set attribute values for bg_model, clip,
+        load_quality and quality for each CS."""
         for cs in self._css:
             cs.set_cs_parameters(**self._cs)
 
@@ -898,7 +900,7 @@ class CVHelper(object):
         cs_frame_count = np.zeros(self._css.size).astype(int)
         for cs_ix, cs in enumerate(self._css):
             cs.set_quality(self.quality)
-            cs.calibrate()
+            # cs.calibrate()
             cs_frame_count[cs_ix] = len(cs)
         N_max_frames = np.min(cs_frame_count)
 

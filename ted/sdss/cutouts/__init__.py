@@ -320,16 +320,13 @@ class CutoutSequence(object):
         """
 
         # Set the clip size
-        if clip is not None:
-            self.set_clip(clip)
+        if clip is not None: self.set_clip(clip)
 
         # Set the background model once for easy reference
-        if bg_model is not None:
-            self.set_bg_model(bg_model)
+        if bg_model is not None: self.set_bg_model(bg_model)
 
         # Set qualities to load into memory
-        if quality is not None:
-            self.set_load_quality(quality)
+        if quality is not None: self.set_load_quality(quality)
 
         # Set the quality to use to the same as the load quality.
         self.set_quality(quality=self.load_quality)
