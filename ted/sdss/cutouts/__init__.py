@@ -358,9 +358,11 @@ class CutoutSequence(object):
 
     def set_clip(self, clip=0):
         self.clip = clip
+        return self
 
     def set_bg_model(self, bg_model=None):
         self.bg_model = bg_model
+        return self
 
     @staticmethod
     def _check_quality(quality):
@@ -372,12 +374,13 @@ class CutoutSequence(object):
         """Set the qualities to load into memory"""
         self._check_quality(quality)
         self.load_quality = quality
+        return self
 
     def set_quality(self, quality):
         """Set the quality to use for the analysis"""
         self._check_quality(quality)
-        # print 'Setting quality to use:', quality
         self.quality = quality
+        return self
 
     @property
     def template(self):
