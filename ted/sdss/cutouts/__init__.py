@@ -295,7 +295,7 @@ class CutoutSequence(object):
     # The memory hurdle
     # -----------------
 
-    def load(self, clip=None, bg_model=None, quality=None):
+    def load(self, clip=None, bg_model=None, quality=[1, 2, 3]):
         """
         Load remapped cutouts and perform preliminary steps for the analysis
 
@@ -309,9 +309,6 @@ class CutoutSequence(object):
         bg_model : str, choice
             Which background model to subtract from the remapped frames to
             obtain the residual images?
-        force : bool
-            Whether or not to force running `self.initialise()`, if this step
-            has not been done prior to running this method.
 
         Side effects
         ------------
@@ -1329,9 +1326,11 @@ wcsremap \
         return sorted(glob.glob(iglob))
 
     def load_cutoutsio_wrapper(self):
-        return self.select_usable(
-            self.select_by_chosen_quality(
-                self.load_cutoutsio()))
+        files = self.load_cutoutsio()
+        files = self.select_by_chosen_quality(files)
+        self._files = self.select_usable(files)
+        self.files = self._files
+        return files
 
     @property
     def fname_cutoutsio(self):
@@ -1744,11 +1743,9 @@ wcsremap \
             plot_binary_fields(self, offset=i)
 
     def __len__(self):
-        if 'files' in dir(self):
-            files = self.files
-        else:
-            files = self.load_cutoutsio_wrapper()
-        return files.shape[0]
+        if 'files' not in dir(self):
+            self.load_cutoutsio_wrapper()
+        return self.files.shape[0]
 
     def __getitem__(self, key):
         """
