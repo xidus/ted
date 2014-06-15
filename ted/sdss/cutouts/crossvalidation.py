@@ -309,19 +309,14 @@ class CVHelper(object):
 
     def _signals_many(self, features, **params):
         """Return list of signal vectors for experiment MANY"""
-        # from pprint import pprint
-        # pprint(params)
-        # raise SystemExit
         signals = []
-        for k, cs in enumerate(features):
+        for cs in features:
             cs.set_fname_gsp(self._fname_signals(**params))
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
                 print  '*' * 10 + ' Using previously saved data ' + '*' * 10
                 signals.append(cs.gs_prediction.flatten())
             else:
-                cs.load()
-                cs.set_quality(self.quality)
-                cs.calibrate()
+                cs.load().set_quality(self.quality).calibrate()
                 cs.calculate_residuals()
                 signals.append(cs.experiment_many(**params))
                 cs.cleanup()
@@ -900,7 +895,7 @@ class CVHelper(object):
         cs_frame_count = np.zeros(self._css.size).astype(int)
         for cs_ix, cs in enumerate(self._css):
             cs.set_quality(self.quality)
-            # cs.calibrate()
+            cs.calibrate()
             cs_frame_count[cs_ix] = len(cs)
         N_max_frames = np.min(cs_frame_count)
 
@@ -979,7 +974,8 @@ class CVHelper(object):
             ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
             ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
 
-            ax.legend(ncol=3)
+            # ax.legend(ncol=3)
+            ax.legend(ncol=4)
             ax2 = ax.twinx()
             ax.set_ylabel(rmath('Accuracy'))
             ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
@@ -1196,7 +1192,7 @@ class CVHelper(object):
         # Print out the maximum accuracy of the training and the number of frames required to get it.
         print 'TRAINING:'
         print '\n'.join([
-            ' Fold {:d}: Best acc.: {7.5f}; N frames: {:d}'.format(
+            ' Fold {:d}: Best acc.: {:7.5f}; N frames: {:d}'.format(
                 fix, moa_train[fix, Nix], Nix) for fix, Nix in enumerate(
                     train_acc_max_ix)])
 
