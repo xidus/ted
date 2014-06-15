@@ -958,8 +958,8 @@ class CVHelper(object):
             N_frames_best = train_acc_max_ix[fold_ix]
             s3 = fstr3.format(N_frames_best)
             ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
-            ax.axvline(x=N_min_frames, c='r', label=rmath(s4))
-            ax.axvline(x=N_max_frames, c='r', label=rmath(s5))
+            ax.axvline(x=N_min_frames, c='r') #, label=rmath(s4))
+            ax.axvline(x=N_max_frames, c='r') #, label=rmath(s5))
             # print ax.bbox
 
             # Display the values of \sigma and \tau
