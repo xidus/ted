@@ -379,7 +379,7 @@ class CutoutSequence(object):
     def set_quality(self, quality):
         """Set the quality to use for the analysis"""
         self._check_quality(quality)
-        print 'Setting quality to use:', quality
+        # print 'Setting quality to use:', quality
         self.quality = quality
 
     @property
