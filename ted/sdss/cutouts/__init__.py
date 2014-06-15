@@ -295,7 +295,7 @@ class CutoutSequence(object):
     # The memory hurdle
     # -----------------
 
-    def load(self, clip=None, bg_model=None, quality=None, force=False):
+    def load(self, clip=None, bg_model=None, quality=None):
         """
         Load remapped cutouts and perform preliminary steps for the analysis
 
