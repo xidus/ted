@@ -102,7 +102,7 @@ class CVHelper(object):
         # return 'prediction_Q-{}.csv'.format(self.qstr)
         return 'prediction-E-{}_Q-{}.csv'.format(self.xp.name, self.qstr)
 
-    @property
+    # @property
     def _fname_signals(self, sigma, tau):
         fstr = 'signals-E-{}_Q-{}_S-{:.2f}_T-{:.2f}.csv'
         return fstr.format(self.xp.name, self.qstr, sigma, tau)
@@ -192,8 +192,8 @@ class CVHelper(object):
     def _get_centroids(self):
         cvh = CVHelper()
         cvh.set_exp('any')
-        # cvh.set_quality(self.quality)
-        cvh.set_quality([1])
+        cvh.set_quality(self.quality)
+        # cvh.set_quality([1])
         return get_centroids(cvh._load_results(ftype='train'))
 
     def _cv_many(self):
@@ -307,6 +307,9 @@ class CVHelper(object):
 
     def _signals_many(self, features, **params):
         """Return list of signal vectors for experiment MANY"""
+        # from pprint import pprint
+        # pprint(params)
+        # raise SystemExit
         signals = []
         for k, cs in enumerate(features):
             cs.set_fname_gsp(self._fname_signals(**params))
