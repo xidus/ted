@@ -898,7 +898,8 @@ class CVHelper(object):
             cs.set_quality(self.quality)
             cs.calibrate()
             cs_frame_count[cs_ix] = len(cs)
-        N_max_frames = np.min(cs_frame_count)
+        N_min_frames = np.min(cs_frame_count)
+        N_max_frames = np.max(cs_frame_count)
 
         # Get CV information
         N_folds = self.N_folds
@@ -925,9 +926,12 @@ class CVHelper(object):
         fstr1 = r'\sigma = {:.2f}'
         fstr2 = r'\tau = {:.2f}'
         fstr3 = r'Train max (\nu = {: >2d})'
-        fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
+        # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
+        fstr4 = r'\nu_\text{min-max} with quality combo (\nu = {: >2d})'
+        fstr5 = r'\nu_\text{max-max} with quality combo (\nu = {: >2d})'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
-        s4 = fstr4.format(N_max_frames)
+        s4 = fstr4.format(N_min_frames)
+        s5 = fstr5.format(N_max_frames)
 
         # Labels
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
@@ -954,7 +958,8 @@ class CVHelper(object):
             N_frames_best = train_acc_max_ix[fold_ix]
             s3 = fstr3.format(N_frames_best)
             ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
-            ax.axvline(x=N_max_frames, c='r', label=rmath(s4))
+            ax.axvline(x=N_min_frames, c='r', label=rmath(s4))
+            ax.axvline(x=N_max_frames, c='r', label=rmath(s5))
             # print ax.bbox
 
             # Display the values of \sigma and \tau
