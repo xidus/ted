@@ -1457,7 +1457,10 @@ wcsremap \
             qix |= (self._files.quality == q)
 
         # Save the stuff that is used in the analysis
-        self.cube_remap = self.get_view(self._cube_remap[:, :, qix], clip=clip)
+        # self.cube_remap = self.get_view(self._cube_remap[:, :, qix], clip=clip)
+        if '_cube_remap' in dir(self):
+            self.cube_remap = self.get_view(
+                self._cube_remap[:, :, qix], clip=clip)
         self.files = self._files.iloc[qix]
         print 'self._files.shape[0] =', self._files.shape[0]
         print 'self.files.shape[0] =', self.files.shape[0]
