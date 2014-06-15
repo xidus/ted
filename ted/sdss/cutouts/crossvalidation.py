@@ -95,7 +95,7 @@ class CVHelper(object):
     def qstr(self):
         return self._qstr(self.quality)
 
-    # FILENAMES
+    # CUTOUT-SEQUENCE FILENAMES
 
     @property
     def _fname_prediction(self):

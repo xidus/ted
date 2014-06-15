@@ -337,6 +337,8 @@ class CutoutSequence(object):
         # Load data into memory
         self.load_registered_cutouts()
 
+        return self
+
     def set_cs_parameters(self, clip, bg_model, quality):
         """
         Set all CutoutSequence parameters in one go.
