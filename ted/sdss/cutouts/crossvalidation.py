@@ -927,8 +927,8 @@ class CVHelper(object):
         fstr2 = r'\tau = {:.2f}'
         fstr3 = r'Train max (\nu = {: >2d})'
         # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
-        fstr4 = r'\nu_\text{{min-max}} with quality combo (\nu = {: >2d})'
-        fstr5 = r'\nu_\text{{max-max}} with quality combo (\nu = {: >2d})'
+        fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
+        fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
         s4 = fstr4.format(N_min_frames)
         s5 = fstr5.format(N_max_frames)
