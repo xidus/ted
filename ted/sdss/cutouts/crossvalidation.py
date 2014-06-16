@@ -74,6 +74,8 @@ class CVHelper(object):
         xp.gskw = dict(exp=xp.name, **xpp)
         self.xp = xp
 
+        return self
+
     # QUALITY
 
     @property
@@ -88,6 +90,7 @@ class CVHelper(object):
     def set_quality(self, quality):
         if isinstance(quality, list):
             self._quality = quality
+        return self
 
     @staticmethod
     def _qstr(quality):
@@ -858,6 +861,288 @@ class CVHelper(object):
         along with standard-deviation surfaces.
         """
 
+    def plot_all(self):
+        """
+        Plot compound plots for 5-fold validation
+        results for experiments ANY2? and BL[RAN]2?"""
+
+        import matplotlib as mpl; mpl.use('pdf')
+        import matplotlib.pyplot as plt
+
+        from mplconf import mplrc
+        from mplconf import rmath
+
+        """
+        Get generic information
+        """
+
+        # Get CV information
+        N_folds = self.N_folds
+
+        # Extract parameter space
+        sigmas = self.xp.sigmas
+        taus = self.xp.taus
+
+        N_sigmas = sigmas.size
+        N_taus = taus.size
+
+        """
+        Get the data for each quality combination (seven in all)
+        """
+
+        # Create Crocc-Validation Helper instances
+        # and set their experiment to the given one
+        # and their qualities to represent all possible combos.
+        qualities = ([1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3])
+        cvhelpers = [CVHelper().set_exp(self.xp.name).set_quality(q)
+            for q in qualities]
+
+        # Get quality strings
+        qstrs = [self._qstr(q) for q in qualities]
+
+        # Load their results (cube of accuracies (COA))
+        coas_train = [cvh._load_results(ftype='train') for cvh in cvhelpers]
+        coas_test = [cvh._load_results(ftype='test') for cvh in cvhelpers]
+
+        """Prepare the data for plotting"""
+
+        # Get every fold's Matrix of Accuracy (MOA) for each quality combo
+        # Shorter reference for the function
+        get_momas = get_matrices_of_maximum_accuracy
+        momas_train = [get_momas(coa) for coa in coas_train]
+        momas_test = [get_momas(coa) for coa in coas_test]
+
+        """Get the CENTRE-OF-MASS (COM) for each fold for every quality"""
+
+        # List of centroids for the best accuracy
+        centroids_train = [get_centroids(coa) for coa in coas_train]
+        centroids_test = [get_centroids(coa) for coa in coas_test]
+
+        # NaNs everywhere besides the centre of mass
+        shape = (N_sigmas, N_taus)
+        args = (shape, np.nan)
+        coms_train = [get_centroid_stack(c, *args) for c in centroids_train]
+        coms_test = [get_centroid_stack(c, *args) for c in centroids_test]
+
+        # Plot settings
+        # -------------
+
+        # mplrc('publish_digital')
+        mplrc('publish_printed')
+
+        def imshow_com(img, ax=None):
+            """Plot centre of mass image"""
+            if ax is None: ax = plt.gca()
+            ix = (img == 1)
+            com = np.zeros((N_sigmas, N_taus, 4))
+            com[ix, :] = np.array([1., .0, .0, 1.])
+            com[~ix, :] = np.array([0., .0, .0, .0])
+            ax.imshow(com, **comskw)
+
+        # Extent
+        # With the bottom is sigmas.min(), imshow must have origin='lower'
+        tmin, tmax = taus.min(), taus.max()
+        dtau = (taus[1] - taus[0]) / 2.
+        smin, smax = sigmas.min(), sigmas.max()
+        dsig = (sigmas[1] - sigmas[0]) / 2.
+        extent = [(tmin - dtau), (tmax + dtau), (smin - dsig), (smax + dsig)]
+
+        # GENERIC image settings
+        imkw = dict(origin='lower', aspect='auto', interpolation='nearest')
+        imkw.update(extent=extent)
+
+        # Image settings for matrices of accuracies
+        moaskw = imkw.copy()
+        moaskw.update(cmap=mpl.cm.coolwarm)
+        # Accuracies can only be between 0 and 100 percent
+        vmin = .4
+        vmax = .6
+        moaskw.update(vmin=vmin, vmax=vmax)
+
+        # Image settings for matrices of maximum-accuracy indices
+        momaskw = imkw.copy()
+        momaskw.update(cmap=mpl.cm.binary)
+
+        # Image settings for matrices of centre-of-mass index
+        comskw = imkw.copy()
+        comskw.update(cmap=None)
+
+        # Figure settings (for plt.subplots)
+        ncols = 5
+        nrows = len(qualities)
+        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 17))
+
+        # Figure-adjustement settings
+        adjustkw = dict(left=.04, bottom=.04, top=.98, right=.93)
+        adjustkw.update(wspace=.10, hspace=.10)
+
+        # Colorbar settings
+        cbkw = dict(extend='neither', drawedges=False)
+        cbkw.update(ticks=np.linspace(vmin, vmax, 3))
+        cbkw.update(orientation='vertical')
+        # Colorbar axes position in figure coordinates
+        cb_l, cb_w = adjustkw.get('right') + .03, 0.01
+
+        # Labels and titles
+        lblkw = dict(fontsize=15)
+        titkw = dict(fontsize=15)
+
+        # Ticks
+        xticks = [.0, .25, .5, .75, 1.]
+
+        # KWrgs for common labels
+        scl_kw = dict(l=r'$\sigma$', b=r'$\tau$')
+        scl_kw.update(lblkw=lblkw)
+
+        # Accuracies
+        # ----------
+
+        """TRAIN: Plot accuracies for each training fold"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on eaxh axis
+        axims = []
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                im = ax.imshow(coas_train[row_ix][:, :, col_ix], **moaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+                    axims.append((ax, im))
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+
+        # Plot colorbar to the right of the accuracies
+        for (ax, im) in axims:
+            bb = ax.get_position()
+            crect = [cb_l, bb.ymin, cb_w, bb.height]
+            fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
+
+        fname = 'moa_E-{}_Q-all_train_folds.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TRAIN: Plot best-accuracy positions with centroids"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on eaxh axis
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                ax.imshow(momas_train[row_ix][:, :, col_ix], **momaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+
+                # Plot a red color for the location of the
+                # centre-of-mass of the maximum accuracy indices.
+                imshow_com(img=coms_train[row_ix][:, :, col_ix], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fname = 'moa_E-{}_Q-all_train_best.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TEST: Plot accuracies for each test fold"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(qstrs[i], **titkw)
+
+        # Plot data on eaxh axis
+        axims = []
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                im = ax.imshow(coas_train[row_ix][:, :, col_ix], **moaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+                    axims.append((ax, im))
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+
+        # Plot colorbar to the right of the accuracies
+        for (ax, im) in axims:
+            bb = ax.get_position()
+            crect = [cb_l, bb.ymin, cb_w, bb.height]
+            fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
+
+        fname = 'moa_E-{}_Q-all_test_folds.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TEST: Plot best-accuracy positions with centroids"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on eaxh axis
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                ax.imshow(momas_test[row_ix][:, :, col_ix], **momaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+
+                # Plot a red color for the location of the
+                # centre-of-mass of the maximum accuracy indices.
+                imshow_com(img=coms_test[row_ix][:, :, col_ix], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fname = 'moa_E-{}_Q-all_test_best.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
     def _plot_results_many(self):
         """Plot results for experiment MANY"""
 
@@ -927,11 +1212,13 @@ class CVHelper(object):
         fstr2 = r'\tau = {:.2f}'
         fstr3 = r'Train max (\nu = {: >2d})'
         # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
-        fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
-        fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
+        # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
+        # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
         # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
-        s4 = fstr4.format(N_min_frames)
-        s5 = fstr5.format(N_max_frames)
+        # s4 = fstr4.format(N_min_frames)
+        # s5 = fstr5.format(N_max_frames)
+        print 'Min-Max:', N_min_frames
+        print 'Max-Max:', N_max_frames
 
         # Labels
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
@@ -1068,12 +1355,22 @@ class CVHelper(object):
 
     def _analyse_many(self):
 
+        # Load list of lists of signal vectors for each fold type
         folds_train = self._load_results_signals(ftype='train')
         folds_test = self._load_results_signals(ftype='test')
 
+        # Get the maximum number of frames to require.
+        # This is the number of minimum number of frames
+        # that a cutout sequence in the current tlist has.
         N_max_frames = np.min([len(cs) for cs in self._css])
-        print 'Maximum number of needed frames required (using all quality combinations):', N_max_frames
+        ostr = 'Maximum number of needed frames required'
+        ostr += ' (using all quality combinations):'
+        print ostr, N_max_frames
 
+        # Create a vector with number of required frames.
+        # this will be the indpendent variable to plot the accuracy against,
+        # but, more importantly, its values will used for comparing with the
+        # number of signals in the signal vector.
         # Include zero (always yes) and the max number of frames
         N_frames = np.arange(0, N_max_frames + 1)
 
@@ -1081,7 +1378,7 @@ class CVHelper(object):
         #  Depth-wise: fold index
         #  Row-wise: cutout sequence
         #  Column-wise: Prediction given required number of frames with signals
-        #  Number of columns is number of frames to require.
+        #  Number of columns is number of frames to require + 1.
         N_css = len(self._css)
         N_test = N_css // self.N_folds
         N_train = N_css - N_test
@@ -1092,13 +1389,18 @@ class CVHelper(object):
         cop_test = np.zeros((N_test, N_frames.size, self.N_folds)).astype(bool)
 
         # Matrix of accuracies (Saved for later and used for plotting)
-        # One row for each fold
-        # Number of columns is number of frames to require.
+        #  Row-wise: fold index
+        #  Column-wise: accuracy for given required number of frames with signals.
+        #  Number of columns is number of frames to require.
         moa_train = np.zeros((self.N_folds, N_frames.size))
         moa_test = np.zeros((self.N_folds, N_frames.size))
 
         # Experiment
+        # ----------
+
+        # labels contain the actual labels for the test set.
         labels = []
+        # Zip up the loaded training and test data as well as the fold generator.
         z = zip(folds_train, folds_test, self._folds)
         for fold_ix, (train, test, data) in enumerate(z):
 
@@ -1109,6 +1411,9 @@ class CVHelper(object):
             labels.append(test_l)
 
             # Create a matrix of predictions
+            #  Row-wise: cutout-sequence index for the current fold
+            #  Column-wise: Prediction given the number of required
+            #   frames in the corresponding column position in N_frames.
             mop_train = np.zeros((N_train, N_frames.size)).astype(bool)
             mop_test = np.zeros((N_test, N_frames.size)).astype(bool)
 
@@ -1116,20 +1421,29 @@ class CVHelper(object):
 
             # Train (continuing where ANY left off)
             for train_ix, signal_vector in enumerate(train):
+
+                # How many cutout frames contain at least one signal,
+                # given the choice of (sigma, tau) for this quality and fold?
                 N_signals = (signal_vector > 0).sum()
+
                 # Vector of predictions
-                # If number of frames containing (any number of) signals
+                # If the number of frames containing (any number of) signals
                 # is at least as large as the number of required frames,
                 # predict that it is an event.
+                #   That is, save a vector whose values are True, when
+                #   N_frames in those positions is less than or equal to
+                #   the number of signals that are actually observed.
                 mop_train[train_ix, :] = (N_frames <= N_signals)
 
             # Save the matrix of predictions in the cube of predictions
             cop_train[:, :, fold_ix] = mop_train
 
             # Vector of accuracies for given fold
+            #  This is obtained by `collapsing` the matrix of predictions
+            #  along the training samples in that fold.
             # Add it as a row in the matrix of accuracies.
             moa_train[fold_ix, :] = (
-                # Broadcast condition column wise
+                # Broadcast condition column-wisely
                 (mop_train == train_l[:, None])
                 # Sum over training samples
                 .sum(axis=0).astype(float)
@@ -1141,19 +1455,14 @@ class CVHelper(object):
             # Train (continuing where ANY left off)
             for test_ix, signal_vector in enumerate(test):
                 N_signals = (signal_vector > 0).sum()
-                # Vector of predictions
-                # If number of frames containing (any number of) signals
-                # is at least as large as the number of required frames,
-                # predict that it is an event.
                 mop_test[test_ix, :] = (N_frames <= N_signals)
 
             # Save the matrix of predictions in the cube of predictions
             cop_test[:, :, fold_ix] = mop_test
 
-            # Vector of accuracies for given fold
-            # Add it as a row in the matrix of accuracies.
+            # Add vector of accuracies to the matrix of accuracies.
             moa_test[fold_ix, :] = (
-                # Broadcast condition column wise
+                # Broadcast condition column-wisely
                 (mop_test == test_l[:, None])
                 # Sum over test samples
                 .sum(axis=0).astype(float)
@@ -1163,6 +1472,7 @@ class CVHelper(object):
         # Save the accuracies
         # -------------------
 
+        # Build index for the dataframe
         folds_ix = np.arange(self.N_folds) + 1
 
         # Train
@@ -1184,16 +1494,8 @@ class CVHelper(object):
 
         # Number of frames giving highest accuracy for each fold
 
-        if 0:
-            # Get the maximum accuracy for each fold.
-            train_acc_max = moa_train.max(axis=1)
-
-            # Given the maximum accuracy in each fold,
-            train_acc_max_ix = np.argmax(moa_train == train_acc_max[:, None], axis=1)
-
-        else:
-            # This yields the same result
-            train_acc_max_ix = np.argmax(moa_train, axis=1)
+        # Get the maximum accuracy for each fold.
+        train_acc_max_ix = np.argmax(moa_train, axis=1)
 
         # Print out the maximum accuracy of the training and the number of frames required to get it.
         print 'TRAINING:'
@@ -1218,8 +1520,11 @@ class CVHelper(object):
         for fold_ix in range(self.N_folds):
 
             N_frames_ix = train_acc_max_ix[fold_ix]
+            # For a given fold_ix and optimal required-number-of-frames index
+            # for the training sample, get the TEST predictions for this fold.
             predictions.append(cop_test[:, N_frames_ix, fold_ix])
 
+        # Show how the predictions compare
         display_table_of_confusion(predictions, labels)
 
     # -- END class CVHelper --
@@ -1538,3 +1843,18 @@ def plot(exp='any', quality=None):
     if quality is not None:
         cvh.set_quality(quality)
     cvh.plot()
+
+def plot_all(exp='any'):
+    """Plot results of N-fold cross-validated grid search for chosen experiment."""
+    available_experiments = (
+        'any', 'any2',
+        'blr', 'blr2',
+        'bla', 'bla2',
+        'bln', 'bln2'
+    )
+    if exp not in available_experiments:
+        print 'Not available for experiment', exp, '...'
+        raise SystemExit
+    cvh = CVHelper()
+    cvh.set_exp(exp)
+    cvh.plot_all()
