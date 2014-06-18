@@ -1559,6 +1559,8 @@ wcsremap \
 
         # Build vector counting number of signals in each frame
         signals = self.cube_threshold.sum(axis=0).sum(axis=0)
+        print 'SIGNAL VECTOR:', signals.shape
+        print signals
 
         # Save copy on disk
         self.save_predictions(signals)

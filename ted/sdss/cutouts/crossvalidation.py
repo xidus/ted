@@ -128,35 +128,24 @@ class CVHelper(object):
     # ANY
 
     def _cv_any(self):
-        for n, data in enumerate(self._folds):
+
+        for fold_ix, data in enumerate(self._folds):
 
             # Fold number
-            fnum = n + 1
+            fnum = fold_ix + 1
 
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
 
-            try:
-                # Training set
-                cop = self._cop_any(train_f)
-                moa = self._moa(cop, train_l)
-                self._save_fold_results_moa(moa=moa, ftype='train', fnum=fnum)
+            # Training set
+            cop_train = self._cop_any(train_f)
+            moa_train = self._moa(cop_train, train_l)
+            self._save_fold_results_moa(moa=moa_train, ftype='train', fnum=fnum)
 
-            except Exception as e:
-                print '_cv_any:', fnum, 'train'
-                print '_cv_any:', e.message
-                print '_cv_any:', '-' * 50, '\n'
-
-            try:
-                # Test set
-                cop = self._cop_any(test_f)
-                moa = self._moa(cop, test_l)
-                self._save_fold_results_moa(moa=moa, ftype='test', fnum=fnum)
-
-            except Exception as e:
-                print '_cv_any:', fnum, 'test'
-                print '_cv_any:', e.message
-                print '_cv_any:', '-' * 50, '\n'
+            # Test set
+            cop_test = self._cop_any(test_f)
+            moa_test = self._moa(cop_test, test_l)
+            self._save_fold_results_moa(moa=moa_test, ftype='test', fnum=fnum)
 
     # ANY2
 
@@ -174,23 +163,23 @@ class CVHelper(object):
 
     def _cv_baseline(self):
 
-        for n, data in enumerate(self._folds):
+        for fold_ix, data in enumerate(self._folds):
 
             # Fold number
-            fnum = n + 1
+            fnum = fold_ix + 1
 
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
 
             # Training set
-            cop = self._cop_baseline(train_f)
-            moa = self._moa(cop, train_l)
-            self._save_fold_results_moa(moa=moa, ftype='train', fnum=fnum)
+            cop_train = self._cop_baseline(train_f)
+            moa_train = self._moa(cop_train, train_l)
+            self._save_fold_results_moa(moa=moa_train, ftype='train', fnum=fnum)
 
             # Test set
-            cop = self._cop_baseline(test_f)
-            moa = self._moa(cop, test_l)
-            self._save_fold_results_moa(moa=moa, ftype='test', fnum=fnum)
+            cop_test = self._cop_baseline(test_f)
+            moa_test = self._moa(cop_test, test_l)
+            self._save_fold_results_moa(moa=moa_test, ftype='test', fnum=fnum)
 
     # MANY
 
@@ -215,7 +204,7 @@ class CVHelper(object):
 
         """
 
-        # List of centroids for the best accuracy
+        # List of centroids for the best train accuracy
         # Get location of the best parameters (sigma, tau) for each fold
         centroids = self._get_centroids()
 
@@ -225,16 +214,14 @@ class CVHelper(object):
         # and in the same order holding the number of signals found in each cutout frame.
         # The same goes for the test data, again with the same sigma and tau.
 
-        for n, data in enumerate(self._folds):
+        for fold_ix, data in enumerate(self._folds):
 
             # Fold number
-            fnum = n + 1
+            fnum = fold_ix + 1
 
-            sigma_ix, tau_ix = centroids[n]
-            params = {
-                'sigma': self.xp.sigmas[sigma_ix],
-                'tau': self.xp.taus[tau_ix]
-            }
+            sigma_ix, tau_ix = centroids[fold_ix]
+            params = {'sigma': self.xp.sigmas[sigma_ix],
+                      'tau': self.xp.taus[tau_ix]}
 
             # Unpack training and test fold (f: features; l: labels)
             (train_f, train_l), (test_f, test_l) = data
@@ -247,6 +234,9 @@ class CVHelper(object):
             self._save_fold_results_signals(signals_train, ftype='train', fnum=fnum)
             self._save_fold_results_signals(signals_test, ftype='test', fnum=fnum)
 
+    # MANY2
+
+    def _cv_many2(self): self._cv_many()
 
     # Grid search
     # -----------
@@ -265,33 +255,24 @@ class CVHelper(object):
         Returns
         -------
         cop : 3D numpy.ndarray
-            Predictions given each parameter combination (rows, cols)
-            and for each cutout frame in the cutout sequence (depthwise).
+            Predictions for each cutout sequence (depth-wise)
+            given each parameter combination (rows, cols).
 
         """
-
-        # Shape of the cube
         shape = (self.xp.N_sigmas, self.xp.N_taus, features.shape[0])
-
         cop = np.zeros(shape).astype(bool)
         for cs_ix, cs in enumerate(features):
-
-            # Set the unique file name for the predictions
+            # Set the unique file name for the grid-search predictions (gsp)
             cs.set_fname_gsp(self._fname_prediction)
-
             # If there is already a result, and it was made after the CV began,
             # re-use it instead of re-calculating it.
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
                 cop[:, :, cs_ix] = cs.gs_prediction
-
             else:
-                cs.load()
-                cs.set_quality(self.quality)
-                cs.calibrate()
+                cs.load().set_quality(self.quality).calibrate()
                 cs.calculate_residuals()
                 cop[:, :, cs_ix] = cs.gridsearch(**self.xp.gskw)
                 cs.cleanup()
-
         return cop
 
     # BASELINE
@@ -331,9 +312,9 @@ class CVHelper(object):
         """Store training accuracies for experiment ANY.
         A.k.a.: matrix of accuracies (moa)."""
         return (
-            # Broadcast along the parameter axes
+            # Broadcast along both parameter axes
             (cop == labels[None, None, :])
-            # Sum along the samples (CutoutSequences)
+            # Sum along the samples (CutoutSequences) (depth-wise)
             .sum(axis=2).astype(float)
             # Divide by the number of training samples
             / labels.size)
