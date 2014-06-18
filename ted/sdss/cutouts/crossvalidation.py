@@ -1055,7 +1055,7 @@ class CVHelper(object):
 
         # The title of each column contains its quality combination
         for i, ax in enumerate(axes.flat[:ncols]):
-            ax.set_title(qstrs[i], **titkw)
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
 
         # Plot data on eaxh axis
         axims = []
