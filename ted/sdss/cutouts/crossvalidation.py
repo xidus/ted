@@ -109,7 +109,7 @@ class CVHelper(object):
 
     # @property
     def _fname_signals(self, sigma, tau):
-        fstr = 'signals-E-{}_Q-{}_S-{:.2f}_T-{:.2f}.csv'
+        fstr = 'signals-E-{}_Q-{}_S-{:5.2f}_T-{:4.2f}.csv'
         return fstr.format(self.xp.name, self.qstr, sigma, tau)
 
     # Fold management
@@ -295,15 +295,19 @@ class CVHelper(object):
         """Return list of signal vectors for experiment MANY"""
         signals = []
         for cs in features:
-            cs.set_fname_gsp(self._fname_signals(**params))
-            if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
-                print  '*' * 10 + ' Using previously saved data ' + '*' * 10
-                signals.append(cs.gs_prediction.flatten())
-            else:
-                cs.load().set_quality(self.quality).calibrate()
-                cs.calculate_residuals()
-                signals.append(cs.experiment_many(**params))
-                cs.cleanup()
+            cs.load().set_quality(self.quality).calibrate()
+            cs.calculate_residuals()
+            signals.append(cs.experiment_many(**params))
+            cs.cleanup()
+            # cs.set_fname_gsp(self._fname_signals(**params))
+            # if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
+            #     print  '*' * 10 + ' Using previously saved data ' + '*' * 10
+            #     signals.append(cs.gs_prediction.flatten())
+            # else:
+            #     cs.load().set_quality(self.quality).calibrate()
+            #     cs.calculate_residuals()
+            #     signals.append(cs.experiment_many(**params))
+            #     cs.cleanup()
         return signals
 
     # Matrix of accuracies
