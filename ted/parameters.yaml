@@ -73,8 +73,8 @@ xp:
     # Type :: dict
     sigmas: &sigmas2
       start: 3
-      stop: 10
-      num: 8
+      stop: 15
+      num: 13
 
     # Relative thresholds
     # Type :: dict
@@ -83,8 +83,14 @@ xp:
       stop: 1.
       num: 21
 
-  # The expanded experiment
+  # Experiment 2
   many:
+
+    sigmas: *sigmas
+    taus: *taus
+
+  # Experiment 3
+  manyc:
 
     sigmas: *sigmas
     taus: *taus
