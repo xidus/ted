@@ -857,9 +857,6 @@ class CVHelper(object):
         Get generic information
         """
 
-        # Get CV information
-        N_folds = self.N_folds
-
         # Extract parameter space
         sigmas = self.xp.sigmas
         taus = self.xp.taus
@@ -1137,20 +1134,28 @@ class CVHelper(object):
 
         mplrc('publish_digital')
 
+        # Get CV information
+        N_folds = self.N_folds
+
+        # Get experiment information
+        qstr = self._qstr(self.quality)
+
         # Load data
 
         # Train
         fname_train = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='train'))
+        print 'fname_train:', fname_train
         ifname_train = os.path.join(self._opath, fname_train)
-        moa_train = pd.read_csv(ifname_train, index_col=[0])
+        moa_train = pd.read_csv(ifname_train, index_col=[0], header=0)
 
         # Number of frames required at the chosen maximum
         train_acc_max_ix = np.argmax(moa_train.values, axis=1)
 
         # Test
         fname_test = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='test'))
+        print 'fname_test:', fname_test
         ifname_test = os.path.join(self._opath, fname_test)
-        moa_test = pd.read_csv(ifname_test, index_col=[0])
+        moa_test = pd.read_csv(ifname_test, index_col=[0], header=0)
 
         # Get the vector with numbers of required frames
         # N_frames = moa_train.columns.astype(int)
@@ -1166,11 +1171,6 @@ class CVHelper(object):
             cs_frame_count[cs_ix] = len(cs)
         N_min_frames = np.min(cs_frame_count)
         N_max_frames = np.max(cs_frame_count)
-
-        # Get CV information
-        N_folds = self.N_folds
-        # Get experiment information
-        qstr = self._qstr(self.quality)
 
         # Extract chosen parameters
         centroids = self._get_centroids()
@@ -1303,7 +1303,7 @@ class CVHelper(object):
     def _analyse_bln2(self): self._analyse_simple() # baseline()
 
     def _analyse_simple(self):
-        """Analyse results any experiment"""
+        """Analyse results for experiments (ANY|BL[RAN])2?"""
 
         # print self._fname_prediction
         # raise SystemExit
@@ -1380,9 +1380,13 @@ class CVHelper(object):
         # ----------
 
         # labels contain the actual labels for the test set.
+        # It is used for creating the tables of confusion.
         labels = []
         # Zip up the loaded training and test data as well as the fold generator.
+        # I.e. we need the signal vectors (train and test) as well as the target
+        # vectors in the fold data which contain the correct labels to compare with.
         z = zip(folds_train, folds_test, self._folds)
+        # Loop over the folds
         for fold_ix, (train, test, data) in enumerate(z):
 
             # Unpack training and test fold (f: features; l: labels)
@@ -1391,7 +1395,7 @@ class CVHelper(object):
             # Add the test labels for later
             labels.append(test_l)
 
-            # Create a matrix of predictions
+            # Create a matrix of predictions for the current fold.
             #  Row-wise: cutout-sequence index for the current fold
             #  Column-wise: Prediction given the number of required
             #   frames in the corresponding column position in N_frames.
@@ -1401,10 +1405,14 @@ class CVHelper(object):
             # TRAIN
 
             # Train (continuing where ANY left off)
+            # Loop over the signal vectors (one for each
+            # cutout sequence) in the current fold
             for train_ix, signal_vector in enumerate(train):
 
                 # How many cutout frames contain at least one signal,
                 # given the choice of (sigma, tau) for this quality and fold?
+
+                # Number of frames containing at least one signal
                 N_signals = (signal_vector > 0).sum()
 
                 # Vector of predictions
@@ -1414,6 +1422,17 @@ class CVHelper(object):
                 #   That is, save a vector whose values are True, when
                 #   N_frames in those positions is less than or equal to
                 #   the number of signals that are actually observed.
+                #       e.g.
+                #           N_frames = [0, 1, 2, 3]
+                #           N_signals = 2
+                #         =>
+                #           N_frames <= N_signals
+                #         =>
+                #           Predict: [True, True, True, False]
+                #
+                # Save the prediction vector at the same row index in the
+                # matric of predictions as the signal vector is located
+                # in the list training samples for the curent fold.
                 mop_train[train_ix, :] = (N_frames <= N_signals)
 
             # Save the matrix of predictions in the cube of predictions
