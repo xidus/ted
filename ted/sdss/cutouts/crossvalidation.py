@@ -219,7 +219,9 @@ class CVHelper(object):
             # Fold number
             fnum = fold_ix + 1
 
+            # Unpack the tuple of (row_ix, col_ix) for the COM location.
             sigma_ix, tau_ix = centroids[fold_ix]
+            # Fix the parameters
             params = {'sigma': self.xp.sigmas[sigma_ix],
                       'tau': self.xp.taus[tau_ix]}
 
@@ -298,7 +300,7 @@ class CVHelper(object):
             cs.set_fname_gsp(self._fname_signals(**params))
             if cs.has_gs_prediction and cs.gs_prediction_time > self._cv_time:
                 print  '*' * 10 + ' Using previously saved data ' + '*' * 10
-                signals.append(cs.gs_prediction.flatten())
+                signals.append(cs.gs_prediction.flatten().astype(int))
             else:
                 cs.load().set_quality(self.quality).calibrate()
                 cs.calculate_residuals()
@@ -408,11 +410,29 @@ class CVHelper(object):
         return ofname
 
     def _save_fold_results_signals(self, signals, ftype, fnum):
+        """
+        Parameters
+        ----------
+        signals : list
+            Each entry is a 1D numpy.ndarray.
+            These arrays have different sizes.
+        ftype : str, 'train' | 'test'
+            The fold type
+        fnum : int
+            Fold number
+
+        """
+        # Unique filename
         fname = self._fn_fstr_many_signals.format(*self._fn_kw(ftype=ftype, fnum=fnum))
+        # Full path
         ofname = os.path.join(self._opath, fname)
         print 'Saving fold results to:', fname
+        # open the file for writing
         with open(ofname, 'w+') as fsock:
+            # Loop over each signal vector
             for signal_vector in signals:
+                # Since the arrays have different lengths,
+                # they have to be manipulated manually.
                 fsock.write(','.join(signal_vector.astype(str)) + '\n')
         return ofname
 
@@ -442,17 +462,24 @@ class CVHelper(object):
         Based on given parameters and chosen experiment,
         load signal vectors for each fold and fold type.
 
+        Parameters
+        ----------
+        ftype : str, 'train' | 'test'
+            The fold type
+
         Returns
         -------
         folds : list
             List with as many entries as folds.
-            Each list entry is another list; this one containing signal
-            vectors; one for each cutout sequence in the given fold.
+            Each list entry is a list of signal vectors for each
+            cutout sequence in the given fold of the given fold type.
 
         """
         folds = []
+        # Loop over the different file names
         for ifname in self._filenames_signals(ftype):
             with open(ifname, 'r') as fsock:
+                # Append the list of signal vectors
                 folds.append(lines2intarrays(fsock.readlines()))
         return folds
 
@@ -1343,7 +1370,24 @@ class CVHelper(object):
         # Get the maximum number of frames to require.
         # This is the number of minimum number of frames
         # that a cutout sequence in the current tlist has.
-        N_max_frames = np.min([len(cs) for cs in self._css])
+        # N_max_frames = np.min([len(cs) for cs in self._css])
+        cs_frame_count = np.zeros(self._css.size).astype(int)
+        for cs_ix, cs in enumerate(self._css):
+            cs.load_cutoutsio_wrapper()
+            # Crucial (perhaps?) to getting useful results
+            # since the list of number of frames to require
+            # should include the largest possible (when qc123 is chosen)
+            # And when I load the CVHelper for a given quality,
+            # this quality is also (?) set for the cutouts sequences
+            # and this translates into smaller numberS of max frames to require.
+            # In other words, the result depends on the quality that was used.
+            # (If I am right...)
+            cs.set_quality([1, 2, 3])
+            cs.calibrate()
+            cs_frame_count[cs_ix] = len(cs)
+            # The weird thing seems to be that the resulting accuracy-vs-nframes-required
+            # all happen when quality 2 is involved, which should give a longer N_frames vector than all other combinations that are not 123.
+        N_max_frames = np.max(cs_frame_count)
         ostr = 'Maximum number of needed frames required'
         ostr += ' (using all quality combinations):'
         print ostr, N_max_frames
