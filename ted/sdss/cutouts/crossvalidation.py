@@ -1387,7 +1387,7 @@ class CVHelper(object):
             cs_frame_count[cs_ix] = len(cs)
             # The weird thing seems to be that the resulting accuracy-vs-nframes-required
             # all happen when quality 2 is involved, which should give a longer N_frames vector than all other combinations that are not 123.
-        N_max_frames = np.max(cs_frame_count)
+        N_max_frames = np.min(cs_frame_count)
         ostr = 'Maximum number of needed frames required'
         ostr += ' (using all quality combinations):'
         print ostr, N_max_frames
