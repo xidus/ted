@@ -1062,7 +1062,7 @@ class CVHelper(object):
         for row_ix in range(nrows):
             for col_ix in range(ncols):
                 ax = axes[row_ix, col_ix]
-                im = ax.imshow(coas_train[row_ix][:, :, col_ix], **moaskw)
+                im = ax.imshow(coas_test[row_ix][:, :, col_ix], **moaskw)
 
                 if col_ix == ncols - 1:
                     ax2 = ax.twinx(); ax2.set_yticks([])
