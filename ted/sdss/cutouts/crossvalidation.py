@@ -1232,8 +1232,8 @@ class CVHelper(object):
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
 
         # Limits
-        ymin = .4
-        ymax = .6
+        xmin, xmax = np.min(N_frames), np.max(N_frames)
+        ymin, ymax = .4, .6
 
         # Accuracies
         # ----------
@@ -1289,7 +1289,7 @@ class CVHelper(object):
             ax2.set_yticks([])
 
         ax.set_xlabel(xlabel)
-        ax.set_xlim(np.min(N_frames), np.max(N_frames))
+        ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
 
         fig.tight_layout()
@@ -1351,7 +1351,7 @@ class CVHelper(object):
             ax.set_ylabel(rmath('Accuracy'))
 
         ax2.set_xlabel(xlabel)
-        ax2.set_xlim(np.min(N_frames), np.max(N_frames))
+        ax2.set_xlim(xmin, xmax)
         ax2.set_ylim(ymin, ymax)
 
         fig.tight_layout()
@@ -1359,6 +1359,9 @@ class CVHelper(object):
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
+
+        print 'PLOTTED MEAN ACCURACIES!'
+
 
     # Analysis
     # --------
