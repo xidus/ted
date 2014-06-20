@@ -708,7 +708,7 @@ class CVHelper(object):
         # axes.flat[ncols / 2].set_title(qtit, **titkw)
         fig.suptitle(qtit, **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for i, ax in enumerate(axes.flat):
             im = ax.imshow(coa_train[:, :, i], **moaskw)
             ax2 = ax.twiny()
@@ -741,7 +741,7 @@ class CVHelper(object):
         # axes.flat[ncols / 2].set_title(qtit, **titkw)
         fig.suptitle(qtit, **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for i, ax in enumerate(axes.flat):
             # Show the locations of all entries having the maximum accuracy
             ax.imshow(momas_train[:, :, i], **momaskw)
@@ -772,7 +772,7 @@ class CVHelper(object):
         # axes.flat[ncols / 2].set_title(qtit, **titkw)
         fig.suptitle(qtit, **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for i, ax in enumerate(axes.flat):
             im = ax.imshow(coa_test[:, :, i], **moaskw)
             ax2 = ax.twiny()
@@ -808,7 +808,7 @@ class CVHelper(object):
         # axes.flat[ncols / 2].set_title(qtit, **titkw)
         fig.suptitle(qtit, **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for i, ax in enumerate(axes.flat):
             # Show the locations of all entries having the maximum accuracy
             ax.imshow(momas_test[:, :, i], **momaskw)
@@ -1011,7 +1011,7 @@ class CVHelper(object):
         for i, ax in enumerate(axes.flat[:ncols]):
             ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         axims = []
         for row_ix in range(nrows):
             for col_ix in range(ncols):
@@ -1050,7 +1050,7 @@ class CVHelper(object):
         for i, ax in enumerate(axes.flat[:ncols]):
             ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for row_ix in range(nrows):
             for col_ix in range(ncols):
                 ax = axes[row_ix, col_ix]
@@ -1084,7 +1084,7 @@ class CVHelper(object):
         for i, ax in enumerate(axes.flat[:ncols]):
             ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         axims = []
         for row_ix in range(nrows):
             for col_ix in range(ncols):
@@ -1123,7 +1123,7 @@ class CVHelper(object):
         for i, ax in enumerate(axes.flat[:ncols]):
             ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         for row_ix in range(nrows):
             for col_ix in range(ncols):
                 ax = axes[row_ix, col_ix]
@@ -1231,6 +1231,10 @@ class CVHelper(object):
         # Labels
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
 
+        # Limits
+        ymin = .4
+        ymax = .6
+
         # Accuracies
         # ----------
 
@@ -1238,7 +1242,7 @@ class CVHelper(object):
         fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
         fig, axes = plt.subplots(N_folds, 1, **fkw)
 
-        # Plot data on eaxh axis
+        # Plot data on each axis
         insert_data = []
         for fold_ix, ax in enumerate(axes.flat):
 
@@ -1286,7 +1290,7 @@ class CVHelper(object):
 
         ax.set_xlabel(xlabel)
         ax.set_xlim(np.min(N_frames), np.max(N_frames))
-        # ax.set_ylim(.0, 1.)
+        ax.set_ylim(ymin, ymax)
 
         fig.tight_layout()
 
@@ -1307,6 +1311,51 @@ class CVHelper(object):
             axin.set_yticks([])
 
         fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        # MEAN accuracies
+        # ---------------
+
+        # Take the mean accuracy over the folds for each fold type
+        acc_mean_train = moa_train.mean.values(axis=0)
+        acc_mean_test = moa_test.mean.values(axis=0)
+
+        # And their standard deviations
+        acc_std_train = moa_train.values.std(axis=0)
+        acc_std_test = moa_test.values.std(axis=0)
+
+        # Create the figure and axes
+        fkw = dict(sharex=True, sharey=True, figsize=(13., 3))
+        fig, (ax1, ax2) = plt.subplots(2, 1, **fkw)
+
+        ax1.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
+
+        # Add the best accuracy lines for each fold
+
+        # And mark the best accuracy when using the mean accuracies
+
+        fbkw = dict(facecolor=colors[0])
+
+        ax1.plot(N_frames, acc_mean_train, label=rmath('Train'))
+        ax1.fill_between(N_frames, acc_mean_train + acc_std_train, acc_mean_train, **fbkw)
+        ax1.fill_between(N_frames, acc_mean_train - acc_std_train, acc_mean_train, **fbkw)
+
+        ax2.plot(N_frames, acc_mean_test, label=rmath('Test'))
+        ax2.fill_between(N_frames, acc_mean_test + acc_std_test, acc_mean_test, **fbkw)
+        ax2.fill_between(N_frames, acc_mean_test - acc_std_test, acc_mean_test, **fbkw)
+
+        for ax in (ax1, ax2):
+            ax.legend(ncol=4)
+            ax.set_ylabel(rmath('Accuracy'))
+
+        ax2.set_xlabel(xlabel)
+        ax2.set_xlim(np.min(N_frames), np.max(N_frames))
+        ax2.set_ylim(ymin, ymax)
+
+        fig.tight_layout()
+        fname = 'moa_E-{}_Q-{}_CV-{}_mean.pdf'.format(self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
