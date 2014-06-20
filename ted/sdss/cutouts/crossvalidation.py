@@ -548,6 +548,8 @@ class CVHelper(object):
         # Just ignore this.
         mpl.use('pdf')
         import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+        formatter = FuncFormatter(lambda x, pos: '%.1f' % x)
 
         from mplconf import mplrc
         from mplconf import rmath
@@ -722,6 +724,7 @@ class CVHelper(object):
         scl_kw.update(lblkw=lblkw)
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # Plot colorbar to the right of the accuracies
         cax = plt.axes(crect)
@@ -758,6 +761,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -782,14 +786,9 @@ class CVHelper(object):
             ax2.set_xticks([])
             ax2.set_xlabel(rmath('Fold {:d}'.format(i + 1)), **lblkw)
 
-        # Set the x label on the bottom-most axes only
-        for ax in axes.flat[-ncols:]:
-            ax.set_xlabel(r'$\tau$')
-            ax.set_xticks(xticks)
-
-        # Set the y label on the left-most axes only
-        for ax in axes.flat[::ncols]:
-            ax.set_ylabel(r'$\sigma$')
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # Plot colorbar to the right of the accuracies
         cax = plt.axes(crect)
@@ -825,6 +824,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -834,44 +834,6 @@ class CVHelper(object):
         plt.savefig(ofname)
         plt.close(fig)
 
-        """EXIT"""
-        """EXIT"""
-        """EXIT"""
-        return
-
-        """
-        Plot distribution of the locations of
-        the best accuracies in the training folds.
-        """
-
-        # fkw = dict(sharex=True, sharey=True, figsize=(15, 8))
-        # fig, (ax1, ax2) = plt.subplots(1, 2, **fkw)
-
-        # X, Y = np.mgrid[0:1:N_sigmas * 1j, 0:1:N_taus * 1j]
-        # positions = np.vstack([X.ravel(), Y.ravel()])
-        # Z = np.reshape(kernel_train(positions).T, X.shape)
-        # ax1.imshow(np.rot90(Z), **moaskw)
-
-        # Plot colorbar above the accuracies...
-        # ax = fig.add_axes([.25, 1.2, .5, .0])
-        # fig.colorbar(mappable=im, ax=ax, **cbkw)
-
-        # fig.tight_layout()
-        # fname = 'kde_coms+coa_test.sum.pdf'
-        # ofname = os.path.join(self._opath, fname)
-        # plt.savefig(ofname)
-
-        """
-        Plot distribution of
-        the sum of the test-fold accuracy matrices.
-        """
-
-        """
-        Plot the surface of
-        average accuracy for the test folds
-        along with standard-deviation surfaces.
-        """
-
     def plot_all(self):
         """
         Plot compound plots for 5-fold validation
@@ -879,6 +841,8 @@ class CVHelper(object):
 
         import matplotlib as mpl; mpl.use('pdf')
         import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+        formatter = FuncFormatter(lambda x, pos: '%.1f' % x)
 
         from mplconf import mplrc
         from mplconf import rmath
@@ -997,8 +961,8 @@ class CVHelper(object):
 
         # Ticks
         # xticks = [.0, .25, .5, .75, 1.]
-        xticks = [.7, .775, .85, .925, .995]
-        # xticks = np.linspace(tmin, tmax, 5)
+        # xticks = [.7, .775, .85, .925, .995]
+        xticks = np.linspace(tmin, tmax, 5)
 
         # KWrgs for common labels
         scl_kw = dict(l=r'$\sigma$', b=r'$\tau$')
@@ -1031,6 +995,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -1072,6 +1037,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -1104,6 +1070,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -1145,6 +1112,7 @@ class CVHelper(object):
 
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
