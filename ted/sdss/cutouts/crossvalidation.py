@@ -1313,16 +1313,14 @@ class CVHelper(object):
         fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
-        print 'BEFORE CLOSING FIG'
         plt.close(fig)
-        print 'AFTER CLOSING FIG'
 
         # MEAN accuracies
         # ---------------
 
         # Take the mean accuracy over the folds for each fold type
-        acc_mean_train = moa_train.mean.values(axis=0)
-        acc_mean_test = moa_test.mean.values(axis=0)
+        acc_mean_train = moa_train.values.mean(axis=0)
+        acc_mean_test = moa_test.values.mean(axis=0)
 
         # And their standard deviations
         acc_std_train = moa_train.values.std(axis=0)
@@ -1361,9 +1359,6 @@ class CVHelper(object):
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
-
-        print 'PLOTTED MEAN ACCURACIES!'
-
 
     # Analysis
     # --------
