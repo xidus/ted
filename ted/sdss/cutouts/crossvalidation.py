@@ -1313,7 +1313,9 @@ class CVHelper(object):
         fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
+        print 'BEFORE CLOSING FIG'
         plt.close(fig)
+        print 'AFTER CLOSING FIG'
 
         # MEAN accuracies
         # ---------------
