@@ -997,7 +997,7 @@ class CVHelper(object):
 
         # Ticks
         # xticks = [.0, .25, .5, .75, 1.]
-        xticks = [.7, .775, .85, .925, 995.]
+        xticks = [.7, .775, .85, .925, .995]
         # xticks = np.linspace(tmin, tmax, 5)
 
         # KWrgs for common labels
