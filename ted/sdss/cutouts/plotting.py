@@ -470,7 +470,7 @@ def plot_unclipped_cutouts(cs):
     pass
 
 
-def plot_binary_fields(cs):
+def plot_binary_fields(cs, offset=0):
     """
     Plot and save image of each binary field.
 
