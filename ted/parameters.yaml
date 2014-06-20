@@ -58,7 +58,7 @@ xp:
     #   start: 1
     #   stop: 5
     #   num: 5
-    sigmas:
+    sigmas: &sigmas
       start: 3
       stop: 15
       num: 13
@@ -69,7 +69,7 @@ xp:
     #   start: .0
     #   stop: 1.
     #   num: 50
-    taus:
+    taus: &taus
       # This gives 60 choices for tau 
       start: .7
       stop: .995
