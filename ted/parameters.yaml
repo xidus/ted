@@ -89,11 +89,9 @@ xp:
     # Relative thresholds
     # Type :: dict
     taus: &taus2
-      # This gives 60 choices for tau 
       start: .7
       stop: .995
-      # num: 21
-      step: .005
+      num: 21
 
   # Experiment 2
   many:
