@@ -697,6 +697,9 @@ class CVHelper(object):
         # Labels
         lblkw = dict(fontsize=15)
 
+        # Ticks
+        xticks = np.linspace(tmin, tmax, 5)
+
         # Accuracies
         # ----------
 
@@ -718,7 +721,7 @@ class CVHelper(object):
         scl_kw = dict(l=r'$\sigma$', b=r'$\tau$', bticks=[.0, .5, 1.])
         scl_kw.update(lblkw=lblkw)
         set_common_labels(axes, ncols, **scl_kw)
-        ax.set_xticks([.0, .5, 1.])
+        ax.set_xticks(xticks)
 
         # Plot colorbar to the right of the accuracies
         cax = plt.axes(crect)
@@ -754,7 +757,7 @@ class CVHelper(object):
             imshow_com(img=coms_train[:, :, i], ax=ax)
 
         set_common_labels(axes, ncols, **scl_kw)
-        ax.set_xticks([.0, .5, 1.])
+        ax.set_xticks(xticks)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -782,7 +785,7 @@ class CVHelper(object):
         # Set the x label on the bottom-most axes only
         for ax in axes.flat[-ncols:]:
             ax.set_xlabel(r'$\tau$')
-            ax.set_xticks([.0, .5, 1.])
+            ax.set_xticks(xticks)
 
         # Set the y label on the left-most axes only
         for ax in axes.flat[::ncols]:
@@ -821,7 +824,7 @@ class CVHelper(object):
             imshow_com(img=coms_test[:, :, i], ax=ax)
 
         set_common_labels(axes, ncols, **scl_kw)
-        ax.set_xticks([.0, .5, 1.])
+        ax.set_xticks(xticks)
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -993,7 +996,8 @@ class CVHelper(object):
         titkw = dict(fontsize=15)
 
         # Ticks
-        xticks = [.0, .25, .5, .75, 1.]
+        # xticks = [.0, .25, .5, .75, 1.]
+        xticks = np.linspace(tmin, tmax, 5)
 
         # KWrgs for common labels
         scl_kw = dict(l=r'$\sigma$', b=r'$\tau$')
