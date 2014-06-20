@@ -1231,6 +1231,11 @@ class CVHelper(object):
         # Labels
         xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
 
+        # Legend
+        legkw = dict(ncol=4)
+        # legkw = dict(ncol=4, loc='upper left')
+        legalph = .8
+
         # Limits
         xmin, xmax = np.min(N_frames), np.max(N_frames)
         ymin, ymax = .4, .6
@@ -1280,7 +1285,8 @@ class CVHelper(object):
             ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
 
             # ax.legend(ncol=3)
-            ax.legend(ncol=4)
+            leg = ax.legend(**legkw)
+            leg.get_frame().set_alpha(legalph)
             ax2 = ax.twinx()
             ax.set_ylabel(rmath('Accuracy'))
             ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
@@ -1327,7 +1333,7 @@ class CVHelper(object):
         acc_std_test = moa_test.values.std(axis=0)
 
         # Create the figure and axes
-        fkw = dict(sharex=True, sharey=True, figsize=(13., 3))
+        fkw = dict(sharex=True, sharey=True, figsize=(13., 4))
         fig, (ax1, ax2) = plt.subplots(2, 1, **fkw)
 
         ax1.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
@@ -1336,7 +1342,7 @@ class CVHelper(object):
 
         # And mark the best accuracy when using the mean accuracies
 
-        fbkw = dict(facecolor=colors[0])
+        fbkw = dict(facecolor=colors[0], alpha=.5)
 
         ax1.plot(N_frames, acc_mean_train, label=rmath('Train'))
         ax1.fill_between(N_frames, acc_mean_train + acc_std_train, acc_mean_train, **fbkw)
@@ -1347,7 +1353,8 @@ class CVHelper(object):
         ax2.fill_between(N_frames, acc_mean_test - acc_std_test, acc_mean_test, **fbkw)
 
         for ax in (ax1, ax2):
-            ax.legend(ncol=4)
+            leg = ax.legend(**legkw)
+            leg.get_frame().set_alpha(legalph)
             ax.set_ylabel(rmath('Accuracy'))
 
         ax2.set_xlabel(xlabel)
