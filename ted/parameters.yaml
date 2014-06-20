@@ -54,17 +54,27 @@ xp:
 
     # Scale to smooth to
     # Type :: dict
-    sigmas: &sigmas
-      start: 1
-      stop: 5
-      num: 5
+    # sigmas: &sigmas
+    #   start: 1
+    #   stop: 5
+    #   num: 5
+    sigmas:
+      start: 3
+      stop: 15
+      num: 13
 
     # Relative thresholds
     # Type :: dict
-    taus: &taus
-      start: .0
-      stop: 1.
-      num: 50
+    # taus: &taus
+    #   start: .0
+    #   stop: 1.
+    #   num: 50
+    taus:
+      # This gives 60 choices for tau 
+      start: .7
+      stop: .995
+      # num: 21
+      step: .005
 
   # Experiment 1 -- new grid on the bloc
   any2:
@@ -79,9 +89,11 @@ xp:
     # Relative thresholds
     # Type :: dict
     taus: &taus2
-      start: .0
-      stop: 1.
-      num: 21
+      # This gives 60 choices for tau 
+      start: .7
+      stop: .995
+      # num: 21
+      step: .005
 
   # Experiment 2
   many:
