@@ -842,7 +842,7 @@ class CVHelper(object):
         import matplotlib as mpl; mpl.use('pdf')
         import matplotlib.pyplot as plt
         from matplotlib.ticker import FuncFormatter
-        formatter = FuncFormatter(lambda x, pos: '%.1f' % x)
+        formatter = FuncFormatter(lambda x, pos: '%.3f' % x)
 
         from mplconf import mplrc
         from mplconf import rmath
@@ -927,8 +927,14 @@ class CVHelper(object):
         moaskw = imkw.copy()
         moaskw.update(cmap=mpl.cm.coolwarm)
         # Accuracies can only be between 0 and 100 percent
-        vmin = .4
-        vmax = .6
+        # vmin = .4
+        # vmax = .6
+        vmin = np.floor(10. * np.min([np.min(coas_train), np.min(coas_test)])) / 10.
+        vmax = np.ceil(10. * np.max([np.max(coas_train), np.max(coas_test)])) / 10.
+        # vmin = .5
+        # vmax = .5
+        # for quality_ix, coas_by_quality in enumerate(coas_train):
+
         moaskw.update(vmin=vmin, vmax=vmax)
 
         # Image settings for matrices of maximum-accuracy indices
@@ -962,7 +968,7 @@ class CVHelper(object):
         # Ticks
         # xticks = [.0, .25, .5, .75, 1.]
         # xticks = [.7, .775, .85, .925, .995]
-        xticks = np.linspace(tmin, tmax, 5)
+        xticks = np.linspace(tmin, tmax, 3)
 
         # KWrgs for common labels
         scl_kw = dict(l=r'$\sigma$', b=r'$\tau$')
