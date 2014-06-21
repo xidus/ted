@@ -186,8 +186,8 @@ class CVHelper(object):
     def _get_centroids(self):
         cvh = CVHelper()
         cvh.set_exp('any')
-        # cvh.set_quality(self.quality)
-        cvh.set_quality([1])
+        cvh.set_quality(self.quality)
+        # cvh.set_quality([1])
         return get_centroids(cvh._load_results(ftype='train'))
 
     def _cv_many(self):
