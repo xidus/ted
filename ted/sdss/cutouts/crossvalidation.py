@@ -1647,8 +1647,13 @@ class CVHelper(object):
         """
 
         # Load list of lists of signal vectors for each fold type
-        folds_train = self._load_results_signals(ftype='train')
-        folds_test = self._load_results_signals(ftype='test')
+        # folds_train = self._load_results_signals(ftype='train')
+        # folds_test = self._load_results_signals(ftype='test')
+        cvh = CVHelper()
+        cvh.set_exp('many')
+        cvh.set_quality(self.quality)
+        folds_train = cvh._load_results_signals(ftype='train')
+        folds_test = cvh._load_results_signals(ftype='test')
 
         # Get the maximum number of frames to require.
         # This is the number of minimum number of frames
