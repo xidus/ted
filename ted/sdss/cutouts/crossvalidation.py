@@ -1051,6 +1051,12 @@ class CVHelper(object):
         ax.set_xticks(xticks)
         ax.xaxis.set_major_formatter(formatter)
 
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
+
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
         fname = 'moa_E-{}_Q-all_train_best.pdf'.format(self.xp.name)
@@ -1083,6 +1089,12 @@ class CVHelper(object):
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
         ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
@@ -1125,6 +1137,12 @@ class CVHelper(object):
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
         ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
