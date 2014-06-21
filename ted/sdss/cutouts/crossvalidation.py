@@ -1638,7 +1638,7 @@ class CVHelper(object):
     # MANY CONSECUTIVE
     # ----------------
 
-    def _analyse_many_consecutive(self):
+    def _analyse_manyc(self):
         """
         Perform Experiment 3: Many consecutive (MANYC)
 
