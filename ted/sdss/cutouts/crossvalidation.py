@@ -1002,6 +1002,9 @@ class CVHelper(object):
         set_common_labels(axes, ncols, **scl_kw)
         ax.set_xticks(xticks)
         ax.xaxis.set_major_formatter(formatter)
+        tcs = ax.xaxis.get_ticklabels()
+        tcs[0].set_ha('left')
+        tcs[-1].set_ha('right')
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
