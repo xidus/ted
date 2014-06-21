@@ -1370,6 +1370,8 @@ class CVHelper(object):
         plt.savefig(ofname)
         plt.close(fig)
 
+    def _plot_results_manyc(self): self._plot_results_many()
+
     # Analysis
     # --------
 
@@ -1418,7 +1420,10 @@ class CVHelper(object):
         for fold_ix, (sigma_ix, tau_ix) in enumerate(centroids):
             predictions.append(cops[fold_ix][sigma_ix, tau_ix, :])
 
-        display_table_of_confusion(predictions, labels)
+        display_mean_table_of_confusion(predictions, labels)
+
+    # MANY
+    # ----
 
     def _analyse_many(self):
 
@@ -1618,7 +1623,7 @@ class CVHelper(object):
         # and grab the prediction vector cop_test[:, N_frames_ix, fold_ix] (i.e. along the rows of the cop)
         # and calculate the confusion matrix given the labels of the test set
 
-        # Prepare input for `display_table_of_confusion`.
+        # Prepare input for `display_mean_table_of_confusion`.
         predictions = []
         for fold_ix in range(self.N_folds):
 
@@ -1628,15 +1633,248 @@ class CVHelper(object):
             predictions.append(cop_test[:, N_frames_ix, fold_ix])
 
         # Show how the predictions compare
-        display_table_of_confusion(predictions, labels)
+        display_mean_table_of_confusion(predictions, labels)
+
+    # MANY CONSECUTIVE
+    # ----------------
+
+    def _analyse_many_consecutive(self):
+        """
+        Perform Experiment 3: Many consecutive (MANYC)
+
+        Analyse the signals vectors for temporal consistency.
+
+        """
+
+        # Load list of lists of signal vectors for each fold type
+        folds_train = self._load_results_signals(ftype='train')
+        folds_test = self._load_results_signals(ftype='test')
+
+        # Get the maximum number of frames to require.
+        # This is the number of minimum number of frames
+        # that a cutout sequence in the current tlist has.
+        N_max_frames = np.min([len(cs) for cs in self._css])
+        ostr = 'Maximum number of consecutive signal frames required'
+        ostr += ' (using all quality combinations):'
+        print ostr, N_max_frames
+
+        # Create a vector with number of required frames.
+        # this will be the indpendent variable to plot the accuracy against,
+        # but, more importantly, its values will used for comparing with the
+        # number of signals in the signal vector.
+        # Include zero (always yes) and the max number of frames
+        N_frames = np.arange(0, N_max_frames + 1)
+
+        # Cube of predictions (USED TO CALCULATE THE TABLE OF CONFUSION)
+        #  Depth-wise: fold index
+        #  Row-wise: cutout sequence
+        #  Column-wise: Prediction given required number of frames with signals
+        #  Number of columns is number of frames to require + 1.
+        N_css = len(self._css)
+        N_test = N_css // self.N_folds
+        N_train = N_css - N_test
+        print 'N_train', N_train
+        print 'N_test', N_test
+        print 'N_train + N_test', N_train + N_test
+        cop_train = np.zeros((N_train, N_frames.size, self.N_folds)).astype(bool)
+        cop_test = np.zeros((N_test, N_frames.size, self.N_folds)).astype(bool)
+
+        # Matrix of accuracies (Saved for later and used for plotting)
+        #  Row-wise: fold index
+        #  Column-wise: accuracy for given required number of frames with signals.
+        #  Number of columns is number of frames to require.
+        moa_train = np.zeros((self.N_folds, N_frames.size))
+        moa_test = np.zeros((self.N_folds, N_frames.size))
+
+        # Experiment
+        # ----------
+
+        def slices(vec, sz):
+            """
+            Slice generator
+
+            Parameters
+            ----------
+            vec : 1D array
+            sz : int > 0
+            """
+
+            from exceptions import StopIteration
+
+            vec = np.asarray(vec)
+            sz = int(sz)
+
+            # Number of possible slices
+            N = vec.size - sz + 1
+
+            if N < 1:
+                raise StopIteration
+
+            for offset in range(N):
+                yield vec[offset:offset + sz]
+
+        def vop_consecutive(signal_vector, N_frames):
+            # Which cutout frames contain at least one signal,
+            # given the choice of (sigma, tau) for this quality and fold?
+
+            # Vector containing True at indices where the cutout
+            # had at least one signal, and False, where none were found.
+            signals = (signal_vector > 0)
+            slen = signals.size
+
+            # Vector of predictions (VOP)
+            # Assume all predictions are False
+            # (so that breaking out of the loop,
+            # the rest of the predictions follow)
+            vop = np.zeros_like(N_frames).astype(bool)
+
+            # Loop over each required number of consecutive signal frames
+            for N_ix, N in enumerate(N_frames):
+                # If the number of cutouts is smaller
+                # than what is asked for, then break out.
+                if slen < N:
+                    break
+                # Create a boolean vector to match slices against.
+                pattern = np.ones(N).astype(bool)
+                # Loop over consecutive slices of the same length as the
+                # number of required consecutive signal frames.
+                for s in slices(signals, N):
+                    # If the slice matches the (simple) pattern ...
+                    if np.all(s == pattern):
+                        # ... predict True and break out of the loop
+                        vop[N_ix] = True
+                        break
+
+            return vop
+
+        # labels contain the actual labels for the test set.
+        # It is used for creating the tables of confusion.
+        labels = []
+        # Zip up the loaded training and test data as well as the fold generator.
+        # I.e. we need the signal vectors (train and test) as well as the target
+        # vectors in the fold data which contain the correct labels to compare with.
+        z = zip(folds_train, folds_test, self._folds)
+        # Loop over the folds
+        for fold_ix, (train, test, data) in enumerate(z):
+
+            # Unpack training and test fold (f: features; l: labels)
+            (train_f, train_l), (test_f, test_l) = data
+
+            # Add the test labels for later
+            labels.append(test_l)
+
+            # Create a matrix of predictions for the current fold.
+            #  Row-wise: cutout-sequence index for the current fold
+            #  Column-wise: Prediction given the number of required
+            #   frames in the corresponding column position in N_frames.
+            mop_train = np.zeros((N_train, N_frames.size)).astype(bool)
+            mop_test = np.zeros((N_test, N_frames.size)).astype(bool)
+
+            # TRAIN
+
+            # Train (continuing where ANY left off)
+            # Loop over the signal vectors (one for each
+            # cutout sequence) in the current fold
+            for train_ix, signal_vector in enumerate(train):
+                mop_train[train_ix, :] = vop_consecutive(signal_vector, N_frames)
+
+            # Save the matrix of predictions in the cube of predictions
+            cop_train[:, :, fold_ix] = mop_train
+
+            # Vector of accuracies for given fold
+            #  This is obtained by `collapsing` the matrix of predictions
+            #  along the training samples in that fold.
+            # Add it as a row in the matrix of accuracies.
+            moa_train[fold_ix, :] = (
+                # Broadcast condition column-wisely
+                (mop_train == train_l[:, None])
+                # Sum over training samples
+                .sum(axis=0).astype(float)
+                # Divide by total number of samples
+                / N_train)
+
+            # TEST
+
+            # Train (continuing where ANY left off)
+            for test_ix, signal_vector in enumerate(test):
+                mop_test[test_ix, :] = vop_consecutive(signal_vector, N_frames)
+
+            # Save the matrix of predictions in the cube of predictions
+            cop_test[:, :, fold_ix] = mop_test
+
+            # Add vector of accuracies to the matrix of accuracies.
+            moa_test[fold_ix, :] = (
+                # Broadcast condition column-wisely
+                (mop_test == test_l[:, None])
+                # Sum over test samples
+                .sum(axis=0).astype(float)
+                # Divide by total number of samples
+                / N_test)
+
+        # Save the accuracies
+        # -------------------
+
+        # Build index for the dataframe
+        folds_ix = np.arange(self.N_folds) + 1
+
+        # Train
+        fname_train = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='train'))
+        ofname_train = os.path.join(self._opath, fname_train)
+        print ofname_train
+        df = pd.DataFrame(data=moa_train, index=folds_ix, columns=N_frames)
+        df.to_csv(ofname_train, index=True, header=True)
+
+        # Test
+        fname_test = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='test'))
+        ofname_test = os.path.join(self._opath, fname_test)
+        print ofname_test
+        df = pd.DataFrame(data=moa_test, index=folds_ix, columns=N_frames)
+        df.to_csv(ofname_test, index=True, header=True)
+
+        # Report some numbers
+        # -------------------
+
+        # Number of frames giving highest accuracy for each fold
+
+        # Get the maximum accuracy for each fold.
+        train_acc_max_ix = np.argmax(moa_train, axis=1)
+
+        # Print out the maximum accuracy of the training and the number of frames required to get it.
+        print 'TRAINING:'
+        print '\n'.join([
+            ' Fold {:d}: Best acc.: {:7.5f}; N frames: {:d}'.format(
+                fix, moa_train[fix, Nix], Nix) for fix, Nix in enumerate(
+                    train_acc_max_ix)])
+
+        # I need a confusion matrix for each fold
+        # For that I need a prediction vector for each test fold
+        # To make it, I need the best choice of number of frames to
+        # require for each fold and then get the predictions given this choice.
+
+        # The best-number-of-frames index is along the columns in the cube of predictions,
+        # (So this is a different form when I obtain the predictions in the previous experiment.)
+        # For each fold (fold_ix), I take the best-accuracy index (N_frames_ux) at which the number of required signal frames have the highest accuracy
+        # and grab the prediction vector cop_test[:, N_frames_ix, fold_ix] (i.e. along the rows of the cop)
+        # and calculate the confusion matrix given the labels of the test set
+
+        # Prepare input for `display_mean_table_of_confusion`.
+        predictions = []
+        for fold_ix in range(self.N_folds):
+
+            N_frames_ix = train_acc_max_ix[fold_ix]
+            # For a given fold_ix and optimal required-number-of-frames index
+            # for the training sample, get the TEST predictions for this fold.
+            predictions.append(cop_test[:, N_frames_ix, fold_ix])
+
+        # Show how the predictions compare
+        display_mean_table_of_confusion(predictions, labels)
 
     # -- END class CVHelper --
 
 
-def display_table_of_confusion(predictions, labels):
+def get_mean_table_of_confusion(predictions, labels, classes):
 
     # Get cube of confusion matrices
-    classes = np.array([True, False])
     coc = confusion_cube(predictions, labels, classes)
     print 'coc.shape =', coc.shape
     # print 'coc[:, :, 0]:'
@@ -1661,6 +1899,18 @@ def display_table_of_confusion(predictions, labels):
     acc_mean = acc_vector.mean()
     acc_std = acc_vector.std()
     acc_err = acc_std / np.sqrt(coc.shape[2])
+
+    return (mean, std, err), (acc_mean, acc_std, acc_err)
+
+
+def display_mean_table_of_confusion(predictions, labels):
+
+    # Get it
+    classes = np.array([True, False])
+    toc, acc = get_mean_table_of_confusion(predictions, labels, classes)
+    # Unpack
+    mean, std, err = toc
+    acc_mean, acc_std, acc_err = acc
 
     # Print all results
     print '\nClass order in confusion matrix:', list(classes)
