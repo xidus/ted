@@ -1885,7 +1885,8 @@ class CVHelper(object):
 
     def save_predictions(self, predictions, labels):
 
-        fname = 'pl_E-{}_Q-{}'.format(self.xp.name, self.qstr)
+        fname = 'pl_E-{}_Q-{}.npy'.format(self.xp.name, self.qstr)
+        print 'SAVING PREDICTIONS TO', fname
         ofname = os.path.join(self._opath, fname)
         array = np.hstack([predictions[:, None], labels[:, None]])
         np.save(ofname, array)
