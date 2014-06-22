@@ -1422,6 +1422,9 @@ class CVHelper(object):
 
         display_mean_table_of_confusion(predictions, labels)
 
+        # Save the predictions
+        self.save_predictions(predictions, labels)
+
     # MANY
     # ----
 
@@ -1634,6 +1637,9 @@ class CVHelper(object):
 
         # Show how the predictions compare
         display_mean_table_of_confusion(predictions, labels)
+
+        # Save the predictions
+        self.save_predictions(predictions, labels)
 
     # MANY CONSECUTIVE
     # ----------------
@@ -1873,6 +1879,23 @@ class CVHelper(object):
 
         # Show how the predictions compare
         display_mean_table_of_confusion(predictions, labels)
+
+        # Save the predictions
+        self.save_predictions(predictions, labels)
+
+    def save_predictions(self, predictions, labels):
+
+        fname = 'pl_E-{}_Q-{}'.format(self.xp.name, self.qstr)
+        ofname = os.path.join(self._opath, fname)
+        array = np.hstack([predictions[:, None], labels[:, None]])
+        np.save(ofname, array)
+
+    def load_predictions(self):
+
+        fname = 'pl_E-{}_Q-{}.npy'.format(self.xp.name, self.qstr)
+        ifname = os.path.join(self._opath, fname)
+        array = np.load(ifname)
+        return array[:, 0], array[:, 1]
 
     # -- END class CVHelper --
 
