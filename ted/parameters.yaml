@@ -70,10 +70,14 @@ xp:
     #   stop: 1.
     #   num: 50
     taus: &taus
-      # This gives 60 choices for tau 
-      start: .7
-      stop: .995
-      # num: 21
+      # # This gives 60 choices for tau
+      # start: .7
+      # stop: .995
+      # # num: 21
+      # step: .005
+      # This gives 80 choices for tau
+      start: .6
+      stop: 1.
       step: .005
 
   # Experiment 1 -- new grid on the bloc
