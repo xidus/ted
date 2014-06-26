@@ -835,9 +835,33 @@ class CVHelper(object):
         plt.close(fig)
 
     def plot_all(self):
+        """Plot results for chosen experiment"""
+        getattr(self, '_plot_all_' + self.xp.name)()
+
+    def _plot_all_any(self): self._plot_compound()
+
+    def _plot_all_blr(self): self._plot_compound()
+    def _plot_all_bla(self): self._plot_compound()
+    def _plot_all_bln(self): self._plot_compound()
+
+    def _plot_all_blr2(self): self._plot_compound()
+    def _plot_all_bla2(self): self._plot_compound()
+    def _plot_all_bln2(self): self._plot_compound()
+
+    def _plot_compound(self):
         """
         Plot compound plots for 5-fold validation
         results for experiments ANY2? and BL[RAN]2?"""
+
+        available_experiments = (
+            'any', 'any2',
+            'blr', 'blr2',
+            'bla', 'bla2',
+            'bln', 'bln2'
+        )
+        if self.xp.name not in available_experiments:
+            print 'Not available for experiment', self.xp.name, '...'
+            raise SystemExit
 
         import matplotlib as mpl; mpl.use('pdf')
         import matplotlib.pyplot as plt
@@ -929,12 +953,338 @@ class CVHelper(object):
         # Accuracies can only be between 0 and 100 percent
         # vmin = .4
         # vmax = .6
-        vmin = np.floor(10. * np.min([np.min(coas_train), np.min(coas_test)])) / 10.
-        vmax = np.ceil(10. * np.max([np.max(coas_train), np.max(coas_test)])) / 10.
-        # vmin = .5
-        # vmax = .5
+        # Get temporary vmin|max
+        vmin_tmp = np.floor(10. * np.min([np.min(coas_train), np.min(coas_test)])) / 10.
+        vmax_tmp = np.ceil(10. * np.max([np.max(coas_train), np.max(coas_test)])) / 10.
+        # Find the largest distance to 50 % accuracy
+        diff = np.max([np.abs(.5 - extrema) for extrema in (vmin_tmp, vmax_tmp)])
+        # Define vmin|vmax to be symetrically distanced to 50 % accuracy
+        vmin = .5 - diff
+        vmax = .5 + diff
+        # Add to the colorbar kwargs
         # for quality_ix, coas_by_quality in enumerate(coas_train):
 
+        moaskw.update(vmin=vmin, vmax=vmax)
+
+        # Image settings for matrices of maximum-accuracy indices
+        momaskw = imkw.copy()
+        momaskw.update(cmap=mpl.cm.binary)
+
+        # Image settings for matrices of centre-of-mass index
+        comskw = imkw.copy()
+        comskw.update(cmap=None)
+
+        # Figure settings (for plt.subplots)
+        ncols = 5
+        nrows = len(qualities)
+        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 17))
+
+        # Figure-adjustement settings
+        adjustkw = dict(left=.04, bottom=.04, top=.98, right=.93)
+        adjustkw.update(wspace=.10, hspace=.10)
+
+        # Colorbar settings
+        cbkw = dict(extend='neither', drawedges=False)
+        cbkw.update(ticks=np.linspace(vmin, vmax, 3))
+        cbkw.update(orientation='vertical')
+        # Colorbar axes position in figure coordinates
+        cb_l, cb_w = adjustkw.get('right') + .03, 0.01
+
+        # Labels and titles
+        lblkw = dict(fontsize=15)
+        titkw = dict(fontsize=15)
+
+        # Ticks
+        # xticks = [.0, .25, .5, .75, 1.]
+        # xticks = [.7, .775, .85, .925, .995]
+        xticks = np.linspace(tmin, tmax, 3)
+
+        # KWrgs for common labels
+        scl_kw = dict(l=r'$\sigma$', b=r'$\tau$')
+        scl_kw.update(lblkw=lblkw)
+
+        # Accuracies
+        # ----------
+
+        """TRAIN: Plot accuracies for each training fold"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on each axis
+        axims = []
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                im = ax.imshow(coas_train[row_ix][:, :, col_ix], **moaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+                    axims.append((ax, im))
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+
+        # Plot colorbar to the right of the accuracies
+        for (ax, im) in axims:
+            bb = ax.get_position()
+            crect = [cb_l, bb.ymin, cb_w, bb.height]
+            fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
+
+        fname = 'moa_E-{}_Q-all_train_folds.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TRAIN: Plot best-accuracy positions with centroids"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on each axis
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                ax.imshow(momas_train[row_ix][:, :, col_ix], **momaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+
+                # Plot a red color for the location of the
+                # centre-of-mass of the maximum accuracy indices.
+                imshow_com(img=coms_train[row_ix][:, :, col_ix], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fname = 'moa_E-{}_Q-all_train_best.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TEST: Plot accuracies for each test fold"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on each axis
+        axims = []
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                im = ax.imshow(coas_test[row_ix][:, :, col_ix], **moaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+                    axims.append((ax, im))
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+
+        # Plot colorbar to the right of the accuracies
+        for (ax, im) in axims:
+            bb = ax.get_position()
+            crect = [cb_l, bb.ymin, cb_w, bb.height]
+            fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
+
+        fname = 'moa_E-{}_Q-all_test_folds.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        """TEST: Plot best-accuracy positions with centroids"""
+
+        # Create the figure and axes
+        fig, axes = plt.subplots(nrows, ncols, **fkw)
+
+        # The title of each column contains its quality combination
+        for i, ax in enumerate(axes.flat[:ncols]):
+            ax.set_title(rmath('Fold {:d}'.format(i + 1)), **titkw)
+
+        # Plot data on each axis
+        for row_ix in range(nrows):
+            for col_ix in range(ncols):
+                ax = axes[row_ix, col_ix]
+                ax.imshow(momas_test[row_ix][:, :, col_ix], **momaskw)
+
+                if col_ix == ncols - 1:
+                    ax2 = ax.twinx(); ax2.set_yticks([])
+                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ax2.set_ylabel(ylabel, **lblkw)
+
+                # Plot a red color for the location of the
+                # centre-of-mass of the maximum accuracy indices.
+                imshow_com(img=coms_test[row_ix][:, :, col_ix], ax=ax)
+
+        set_common_labels(axes, ncols, **scl_kw)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_major_formatter(formatter)
+
+        # Manually align the ticklabels so that they are visible.
+        for ax in axes.flat[-ncols:]:
+            tcs = ax.xaxis.get_ticklabels()
+            tcs[0].set_ha('left')
+            tcs[-1].set_ha('right')
+
+        # fig.tight_layout()
+        fig.subplots_adjust(**adjustkw)
+        fname = 'moa_E-{}_Q-all_test_best.pdf'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+    def _plot_baseline(self):
+        """
+        Plot compound plots for 5-fold validation
+        results for experiments BL[RAN]2?
+        """
+
+        import matplotlib as mpl; mpl.use('pdf')
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import FuncFormatter
+        formatter = FuncFormatter(lambda x, pos: '%.3f' % x)
+
+        from mplconf import mplrc
+        from mplconf import rmath
+
+        """
+        Get generic information
+        """
+
+        # Extract parameter space
+        sigmas = self.xp.sigmas
+        taus = self.xp.taus
+
+        N_sigmas = sigmas.size
+        N_taus = taus.size
+
+        """
+        Get the data for each quality combination (seven in all)
+        """
+
+        # Create Crocc-Validation Helper instances
+        # and set their experiment to the given one
+        # and their qualities to represent all possible combos.
+        qualities = ([1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3])
+        cvhelpers = [CVHelper().set_exp(self.xp.name).set_quality(q)
+            for q in qualities]
+
+        # Get quality strings
+        qstrs = [self._qstr(q) for q in qualities]
+
+        # Load their results (cube of accuracies (COA))
+        coas_train = [cvh._load_results(ftype='train') for cvh in cvhelpers]
+        coas_test = [cvh._load_results(ftype='test') for cvh in cvhelpers]
+
+        """Prepare the data for plotting"""
+
+        # Get every fold's Matrix of Accuracy (MOA) for each quality combo
+        # Shorter reference for the function
+        get_momas = get_matrices_of_maximum_accuracy
+        momas_train = [get_momas(coa) for coa in coas_train]
+        momas_test = [get_momas(coa) for coa in coas_test]
+
+        """Get the CENTRE-OF-MASS (COM) for each fold for every quality"""
+
+        # List of centroids for the best accuracy
+        centroids_train = [get_centroids(coa) for coa in coas_train]
+        centroids_test = [get_centroids(coa) for coa in coas_test]
+
+        # NaNs everywhere besides the centre of mass
+        shape = (N_sigmas, N_taus)
+        args = (shape, np.nan)
+        coms_train = [get_centroid_stack(c, *args) for c in centroids_train]
+        coms_test = [get_centroid_stack(c, *args) for c in centroids_test]
+
+        # Plot settings
+        # -------------
+
+        # mplrc('publish_digital')
+        mplrc('publish_printed')
+
+        def imshow_com(img, ax=None):
+            """Plot centre of mass image"""
+            if ax is None: ax = plt.gca()
+            ix = (img == 1)
+            com = np.zeros((N_sigmas, N_taus, 4))
+            com[ix, :] = np.array([1., .0, .0, 1.])
+            com[~ix, :] = np.array([0., .0, .0, .0])
+            ax.imshow(com, **comskw)
+
+        # Extent
+        # With the bottom is sigmas.min(), imshow must have origin='lower'
+        tmin, tmax = taus.min(), taus.max()
+        dtau = (taus[1] - taus[0]) / 2.
+        smin, smax = sigmas.min(), sigmas.max()
+        dsig = (sigmas[1] - sigmas[0]) / 2.
+        extent = [(tmin - dtau), (tmax + dtau), (smin - dsig), (smax + dsig)]
+
+        # GENERIC image settings
+        imkw = dict(origin='lower', aspect='auto', interpolation='nearest')
+        imkw.update(extent=extent)
+
+        # Image settings for matrices of accuracies
+        moaskw = imkw.copy()
+        moaskw.update(cmap=mpl.cm.coolwarm)
+        # Accuracies can only be between 0 and 100 percent
+        # vmin = .4
+        # vmax = .6
+        # Get temporary vmin|max
+        vmin_tmp = np.floor(10. * np.min([np.min(coas_train), np.min(coas_test)])) / 10.
+        vmax_tmp = np.ceil(10. * np.max([np.max(coas_train), np.max(coas_test)])) / 10.
+        # Find the largest distance to 50 % accuracy
+        diff = np.max([np.abs(.5 - extrema) for extrema in (vmin_tmp, vmax_tmp)])
+        # Define vmin|vmax to be symetrically distanced to 50 % accuracy
+        vmin = .5 - diff
+        vmax = .5 + diff
+        # Add to the colorbar kwargs
         moaskw.update(vmin=vmin, vmax=vmax)
 
         # Image settings for matrices of maximum-accuracy indices
@@ -2231,15 +2581,6 @@ def plot(exp='any', quality=None):
 
 def plot_all(exp='any'):
     """Plot results of N-fold cross-validated grid search for chosen experiment."""
-    available_experiments = (
-        'any', 'any2',
-        'blr', 'blr2',
-        'bla', 'bla2',
-        'bln', 'bln2'
-    )
-    if exp not in available_experiments:
-        print 'Not available for experiment', exp, '...'
-        raise SystemExit
     cvh = CVHelper()
     cvh.set_exp(exp)
     cvh.plot_all()
