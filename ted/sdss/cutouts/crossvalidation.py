@@ -1296,7 +1296,7 @@ class CVHelper(object):
         fkw = dict(sharex=True, sharey=True, figsize=(13.5, 9.))
 
         # Figure-adjustement settings
-        adjustkw = dict(left=.04, bottom=.04, top=.98, right=.93)
+        adjustkw = dict(left=.04, bottom=.09, top=.95, right=.93)
         adjustkw.update(wspace=.10, hspace=.10)
 
         # Colorbar settings
