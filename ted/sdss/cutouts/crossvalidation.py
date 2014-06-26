@@ -840,13 +840,13 @@ class CVHelper(object):
 
     def _plot_all_any(self): self._plot_compound()
 
-    def _plot_all_blr(self): self._plot_compound()
-    def _plot_all_bla(self): self._plot_compound()
-    def _plot_all_bln(self): self._plot_compound()
+    def _plot_all_blr(self): self._plot_baseline()
+    def _plot_all_bla(self): self._plot_baseline()
+    def _plot_all_bln(self): self._plot_baseline()
 
-    def _plot_all_blr2(self): self._plot_compound()
-    def _plot_all_bla2(self): self._plot_compound()
-    def _plot_all_bln2(self): self._plot_compound()
+    def _plot_all_blr2(self): self._plot_baseline()
+    def _plot_all_bla2(self): self._plot_baseline()
+    def _plot_all_bln2(self): self._plot_baseline()
 
     def _plot_compound(self):
         """
@@ -886,7 +886,7 @@ class CVHelper(object):
         Get the data for each quality combination (seven in all)
         """
 
-        # Create Crocc-Validation Helper instances
+        # Create Cross-Validation Helper instances
         # and set their experiment to the given one
         # and their qualities to represent all possible combos.
         qualities = ([1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3])
@@ -1209,15 +1209,16 @@ class CVHelper(object):
         Get the data for each quality combination (seven in all)
         """
 
-        # Create Crocc-Validation Helper instances
-        # and set their experiment to the given one
-        # and their qualities to represent all possible combos.
-        qualities = ([1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3])
-        cvhelpers = [CVHelper().set_exp(self.xp.name).set_quality(q)
-            for q in qualities]
+        # Short-hand names for the baseline experiments
+        experiments = ('blr', 'bla', 'bln')
+        xpstrs = ('Random', 'Always', 'Never')
 
-        # Get quality strings
-        qstrs = [self._qstr(q) for q in qualities]
+        # Create Cross-Validation Helper instance
+        # and set their experiment to the each given baseline
+        # experiment, respectively.
+        # Since the cube of accuracy is the same length for each quality,
+        # I need not set the quality to [1] to load fewer data.
+        cvhelpers = [CVHelper().set_exp(xp) for xp in experiments]
 
         # Load their results (cube of accuracies (COA))
         coas_train = [cvh._load_results(ftype='train') for cvh in cvhelpers]
@@ -1274,16 +1275,10 @@ class CVHelper(object):
         moaskw = imkw.copy()
         moaskw.update(cmap=mpl.cm.coolwarm)
         # Accuracies can only be between 0 and 100 percent
-        # vmin = .4
-        # vmax = .6
-        # Get temporary vmin|max
-        vmin_tmp = np.floor(10. * np.min([np.min(coas_train), np.min(coas_test)])) / 10.
-        vmax_tmp = np.ceil(10. * np.max([np.max(coas_train), np.max(coas_test)])) / 10.
-        # Find the largest distance to 50 % accuracy
-        diff = np.max([np.abs(.5 - extrema) for extrema in (vmin_tmp, vmax_tmp)])
-        # Define vmin|vmax to be symetrically distanced to 50 % accuracy
-        vmin = .5 - diff
-        vmax = .5 + diff
+        # These limits are taken from the calculated limits
+        # when plotting accuracies for the experiments.
+        vmin = .3
+        vmax = .7
         # Add to the colorbar kwargs
         moaskw.update(vmin=vmin, vmax=vmax)
 
@@ -1297,7 +1292,7 @@ class CVHelper(object):
 
         # Figure settings (for plt.subplots)
         ncols = 5
-        nrows = len(qualities)
+        nrows = len(experiments)
         fkw = dict(sharex=True, sharey=True, figsize=(13.5, 17))
 
         # Figure-adjustement settings
@@ -1345,7 +1340,7 @@ class CVHelper(object):
 
                 if col_ix == ncols - 1:
                     ax2 = ax.twinx(); ax2.set_yticks([])
-                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ylabel = rmath('Experiment: {}'.format(xpstrs[row_ix]))
                     ax2.set_ylabel(ylabel, **lblkw)
                     axims.append((ax, im))
 
@@ -1368,7 +1363,7 @@ class CVHelper(object):
             crect = [cb_l, bb.ymin, cb_w, bb.height]
             fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
 
-        fname = 'moa_E-{}_Q-all_train_folds.pdf'.format(self.xp.name)
+        fname = 'moa_E-baseline_train_folds.pdf'.format(self.xp.name)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -1390,7 +1385,7 @@ class CVHelper(object):
 
                 if col_ix == ncols - 1:
                     ax2 = ax.twinx(); ax2.set_yticks([])
-                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ylabel = rmath('Experiment: {}'.format(xpstrs[row_ix]))
                     ax2.set_ylabel(ylabel, **lblkw)
 
                 # Plot a red color for the location of the
@@ -1409,7 +1404,7 @@ class CVHelper(object):
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
-        fname = 'moa_E-{}_Q-all_train_best.pdf'.format(self.xp.name)
+        fname = 'moa_E-baseline_train_best.pdf'.format(self.xp.name)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -1432,7 +1427,7 @@ class CVHelper(object):
 
                 if col_ix == ncols - 1:
                     ax2 = ax.twinx(); ax2.set_yticks([])
-                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ylabel = rmath('Experiment: {}'.format(xpstrs[row_ix]))
                     ax2.set_ylabel(ylabel, **lblkw)
                     axims.append((ax, im))
 
@@ -1455,7 +1450,7 @@ class CVHelper(object):
             crect = [cb_l, bb.ymin, cb_w, bb.height]
             fig.colorbar(mappable=im, cax=plt.axes(crect), **cbkw)
 
-        fname = 'moa_E-{}_Q-all_test_folds.pdf'.format(self.xp.name)
+        fname = 'moa_E-baseline_test_folds.pdf'.format(self.xp.name)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
@@ -1477,7 +1472,7 @@ class CVHelper(object):
 
                 if col_ix == ncols - 1:
                     ax2 = ax.twinx(); ax2.set_yticks([])
-                    ylabel = rmath('Quality: {}'.format(qstrs[row_ix]))
+                    ylabel = rmath('Experiment: {}'.format(xpstrs[row_ix]))
                     ax2.set_ylabel(ylabel, **lblkw)
 
                 # Plot a red color for the location of the
@@ -1496,7 +1491,7 @@ class CVHelper(object):
 
         # fig.tight_layout()
         fig.subplots_adjust(**adjustkw)
-        fname = 'moa_E-{}_Q-all_test_best.pdf'.format(self.xp.name)
+        fname = 'moa_E-baseline_test_best.pdf'.format(self.xp.name)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
