@@ -1293,10 +1293,10 @@ class CVHelper(object):
         # Figure settings (for plt.subplots)
         ncols = 5
         nrows = len(experiments)
-        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 9.))
+        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 8.5))
 
         # Figure-adjustement settings
-        adjustkw = dict(left=.04, bottom=.09, top=.95, right=.93)
+        adjustkw = dict(left=.04, bottom=.09, top=.93, right=.93)
         adjustkw.update(wspace=.10, hspace=.10)
 
         # Colorbar settings
