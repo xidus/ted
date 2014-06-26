@@ -1293,7 +1293,7 @@ class CVHelper(object):
         # Figure settings (for plt.subplots)
         ncols = 5
         nrows = len(experiments)
-        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 17))
+        fkw = dict(sharex=True, sharey=True, figsize=(13.5, 9.))
 
         # Figure-adjustement settings
         adjustkw = dict(left=.04, bottom=.04, top=.98, right=.93)
