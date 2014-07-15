@@ -1854,6 +1854,9 @@ class CVHelper(object):
         # Plot
         linekw = dict(alpha=.8, lw=3)
         pointkw = dict(alpha=.8, marker='H', ms=10, mec='none')
+        sigma_lim = sigmas.min(), sigmas.max()
+        tau_lim = taus.min(), taus.max()
+        nu_lim = N_frames.min(), N_frames.max()
 
         fig = plt.figure(figsize=(12., 2.))
 
@@ -1871,6 +1874,9 @@ class CVHelper(object):
                 ax.plot3D(x, y, z, **linekw)
                 ax.plot3D([xi], [yi], [zi], **pointkw)
 
+            ax.set_xlim(*sigma_lim)
+            ax.set_ylim(*tau_lim)
+            ax.set_zlim(*nu_lim)
             # ax.set_xticks([])
             # ax.set_yticks([])
             # ax.set_zticks([])
