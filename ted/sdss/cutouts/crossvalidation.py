@@ -522,6 +522,8 @@ class CVHelper(object):
     # Visualisation
     # -------------
 
+    # PLOT single experiment+quality
+
     def plot(self):
         """Plot results for chosen experiment"""
         getattr(self, '_plot_results_' + self.xp.name)()
@@ -834,11 +836,235 @@ class CVHelper(object):
         plt.savefig(ofname)
         plt.close(fig)
 
+    def _plot_results_many(self):
+        """Plot results for experiment MANY"""
+
+        # Select backend beforehand to make it run on the image servers
+        import matplotlib as mpl; mpl.use('pdf')
+        import matplotlib.pyplot as plt
+
+        from mplconf import mplrc
+        from mplconf import rmath
+
+        mplrc('publish_digital')
+
+        # Get CV information
+        N_folds = self.N_folds
+
+        # Get experiment information
+        qstr = self._qstr(self.quality)
+
+        # Load data
+
+        # Train
+        fname_train = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='train'))
+        print 'fname_train:', fname_train
+        ifname_train = os.path.join(self._opath, fname_train)
+        moa_train = pd.read_csv(ifname_train, index_col=[0], header=0)
+
+        # Number of frames required at the chosen maximum
+        train_acc_max_ix = np.argmax(moa_train.values, axis=1)
+
+        # Test
+        fname_test = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='test'))
+        print 'fname_test:', fname_test
+        ifname_test = os.path.join(self._opath, fname_test)
+        moa_test = pd.read_csv(ifname_test, index_col=[0], header=0)
+
+        # Get the vector with numbers of required frames
+        # N_frames = moa_train.columns.astype(int)
+        N_frames = np.arange(0, moa_train.shape[1])
+
+        # Get the maximum number of frames that can
+        # be required when using this quality
+        cs_frame_count = np.zeros(self._css.size).astype(int)
+        for cs_ix, cs in enumerate(self._css):
+            cs.load_cutoutsio_wrapper()
+            cs.set_quality(self.quality)
+            cs.calibrate()
+            cs_frame_count[cs_ix] = len(cs)
+        N_min_frames = np.min(cs_frame_count)
+        N_max_frames = np.max(cs_frame_count)
+
+        # Extract chosen parameters
+        centroids = self._get_centroids()
+
+        # Plot settings
+        # -------------
+
+        colors = mpl.rcParams.get('axes.color_cycle')
+
+        # pkw = dict(lw=3, c=colors[0])
+        inkw = dict(ls='none', marker='.', ms=8, mec='none', c=colors[4])
+        # Make the point visible outside the axes extent,
+        # and put it on top of everythin else in the axes instance
+        inkw.update(clip_on=False, zorder=100)
+        # bboxkw = dict(facecolor='#efefef', edgecolor='#cccccc', pad=10.0)
+        # bboxkw = dict()
+        bboxkw = dict(facecolor='w', alpha=.8)
+        tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
+        fstr1 = r'\sigma = {:.2f}'
+        fstr2 = r'\tau = {:.2f}'
+        fstr3 = r'Train max (\nu = {: >2d})'
+        # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
+        # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
+        # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
+        # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
+        # s4 = fstr4.format(N_min_frames)
+        # s5 = fstr5.format(N_max_frames)
+        print 'Min-Max:', N_min_frames
+        print 'Max-Max:', N_max_frames
+
+        # Labels
+        xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
+
+        # Legend
+        legkw = dict(ncol=4)
+        # legkw = dict(ncol=4, loc='upper left')
+        legalph = .8
+
+        # Limits
+        xmin, xmax = np.min(N_frames), np.max(N_frames)
+        ymin, ymax = .4, .6
+
+        # Accuracies
+        # ----------
+
+        # Create the figure and axes
+        fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
+        fig, axes = plt.subplots(N_folds, 1, **fkw)
+
+        # Plot data on each axis
+        insert_data = []
+        for fold_ix, ax in enumerate(axes.flat):
+
+            if fold_ix == 0:
+                ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
+
+            # Add the accuracy lines
+
+            # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
+            ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
+            ax.plot(N_frames, moa_test.values[fold_ix, :], label=rmath('Test'))
+            N_frames_best = train_acc_max_ix[fold_ix]
+            s3 = fstr3.format(N_frames_best)
+            ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
+            ax.axvline(x=N_min_frames, c='r') #, label=rmath(s4))
+            ax.axvline(x=N_max_frames, c='r') #, label=rmath(s5))
+            # print ax.bbox
+
+            # Display the values of \sigma and \tau
+
+            fnum = fold_ix + 1
+            sigma_ix, tau_ix = centroids[fold_ix]
+            sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
+
+            # Save handles and data until after tightening the figure layout
+            insert_data.append((ax, sigma, tau))
+
+            # Write data out immediately
+            s1 = rmath(fstr1.format(sigma))
+            s2 = rmath(fstr2.format(tau))
+            # s = '{}\n\{}'.format(s1, s2)
+            # s = rmath(fstr.format(sigma, tau))
+            # y = ax.get_position().ymin + .01
+            ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
+            ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
+
+            # ax.legend(ncol=3)
+            leg = ax.legend(**legkw)
+            leg.get_frame().set_alpha(legalph)
+            ax2 = ax.twinx()
+            ax.set_ylabel(rmath('Accuracy'))
+            ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
+
+            # ax.set_yticks([.0, .5, 1.])
+            ax2.set_yticks([])
+
+        ax.set_xlabel(xlabel)
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+
+        fig.tight_layout()
+
+        # Add insert axes (after the change in fig.transFigure from calling fig.tight_layout())
+        fig_w, fig_h = fig.get_size_inches()
+        fig_w2h = float(fig_w) / fig_h
+        sz = .035
+        l, w, h = .85, sz, sz * fig_w2h
+        for ax, sigma, tau in insert_data:
+            b = ax.get_position().ymin + .015
+            axin = fig.add_axes([l, b, w, h])
+            axin.plot([tau], [sigma], **inkw)
+            # axin.set_ylabel(rmath(r'\sigma'))
+            # axin.set_xlabel(rmath(r'\tau'))
+            axin.set_ylim(*self.xp.sigmas[[0, -1]])
+            axin.set_xlim(*self.xp.taus[[0, -1]])
+            axin.set_xticks([])
+            axin.set_yticks([])
+
+        fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+        # MEAN accuracies
+        # ---------------
+
+        # Take the mean accuracy over the folds for each fold type
+        acc_mean_train = moa_train.values.mean(axis=0)
+        acc_mean_test = moa_test.values.mean(axis=0)
+
+        # And their standard deviations
+        acc_std_train = moa_train.values.std(axis=0)
+        acc_std_test = moa_test.values.std(axis=0)
+
+        # Create the figure and axes
+        fkw = dict(sharex=True, sharey=True, figsize=(13., 4))
+        fig, (ax1, ax2) = plt.subplots(2, 1, **fkw)
+
+        ax1.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
+
+        # Add the best accuracy lines for each fold
+
+        # And mark the best accuracy when using the mean accuracies
+
+        fbkw = dict(facecolor=colors[0], alpha=.5)
+
+        ax1.plot(N_frames, acc_mean_train, label=rmath('Train'))
+        ax1.fill_between(N_frames, acc_mean_train + acc_std_train, acc_mean_train, **fbkw)
+        ax1.fill_between(N_frames, acc_mean_train - acc_std_train, acc_mean_train, **fbkw)
+
+        ax2.plot(N_frames, acc_mean_test, label=rmath('Test'))
+        ax2.fill_between(N_frames, acc_mean_test + acc_std_test, acc_mean_test, **fbkw)
+        ax2.fill_between(N_frames, acc_mean_test - acc_std_test, acc_mean_test, **fbkw)
+
+        for ax in (ax1, ax2):
+            leg = ax.legend(**legkw)
+            leg.get_frame().set_alpha(legalph)
+            ax.set_ylabel(rmath('Accuracy'))
+
+        ax2.set_xlabel(xlabel)
+        ax2.set_xlim(xmin, xmax)
+        ax2.set_ylim(ymin, ymax)
+
+        fig.tight_layout()
+        fname = 'moa_E-{}_Q-{}_CV-{}_mean.pdf'.format(self.xp.name, qstr, N_folds)
+        ofname = os.path.join(self._opath, fname)
+        plt.savefig(ofname)
+        plt.close(fig)
+
+    def _plot_results_manyc(self): self._plot_results_many()
+
+    # PLOT ALL quality combinations for a given experiment.
+
     def plot_all(self):
         """Plot results for chosen experiment"""
         getattr(self, '_plot_all_' + self.xp.name)()
 
     def _plot_all_any(self): self._plot_compound()
+    def _plot_all_many(self): self._plot_compound_many()
+    def _plot_all_manyc(self): self._plot_compound_many()
 
     def _plot_all_blr(self): self._plot_baseline()
     def _plot_all_bla(self): self._plot_baseline()
@@ -1496,226 +1722,154 @@ class CVHelper(object):
         plt.savefig(ofname)
         plt.close(fig)
 
-    def _plot_results_many(self):
-        """Plot results for experiment MANY"""
+    def _plot_compound_many(self):
+        """Plot compound plots for 5-fold validation
+        results for experiments MANYC?"""
 
-        import matplotlib as mpl
         # Select backend beforehand to make it run on the image servers
-        mpl.use('pdf')
+        import matplotlib as mpl; mpl.use('pdf')
         import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        # from matplotlib.ticker import FuncFormatter
+        # formatter = FuncFormatter(lambda x, pos: '%.3f' % x)
 
         from mplconf import mplrc
         from mplconf import rmath
+        from aux import darken
 
         mplrc('publish_digital')
+        colors = mpl.rcParams.get('axes.color_cycle')
+
+        """
+        Get generic information
+        """
+
+        # Extract parameter space
+        sigmas = self.xp.sigmas
+        taus = self.xp.taus
+
+        N_sigmas = sigmas.size
+        N_taus = taus.size
+
+        """
+        Get the data for each quality combination (seven in all)
+        """
 
         # Get CV information
         N_folds = self.N_folds
 
-        # Get experiment information
-        qstr = self._qstr(self.quality)
+        # Create Cross-Validation Helper instances
+        # and set their experiment to the given one
+        # and their qualities to represent all possible combos.
+        qualities = ([1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3])
+        # Count them
+        N_qualities = len(qualities)
+        # Use them
+        cvhelpers = [CVHelper().set_exp(self.xp.name).set_quality(q)
+            for q in qualities]
+
+        # Get quality strings
+        qstrs = [self._qstr(q) for q in qualities]
+
+        # Get the maximum number of frames to require.
+        # This is the number of minimum number of frames
+        # that a cutout sequence in the current tlist has.
+        N_max_frames = np.min([len(cs) for cs in self._css])
+        # cs_frame_count = np.zeros(self._css.size).astype(int)
+        # for cs_ix, cs in enumerate(self._css):
+        #     cs.load_cutoutsio_wrapper()
+        #     cs.set_quality([1, 2, 3])
+        #     cs.calibrate()
+        #     cs_frame_count[cs_ix] = len(cs)
+        #     # The weird thing seems to be that the resulting accuracy-vs-nframes-required
+        #     # all happen when quality 2 is involved, which should give a longer N_frames vector than all other combinations that are not 123.
+        # N_max_frames = np.min(cs_frame_count)
+
+        # Get vector of N frames to require
+        N_frames = np.arange(0, N_max_frames + 1)
 
         # Load data
+        # --
 
-        # Train
-        fname_train = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='train'))
-        print 'fname_train:', fname_train
-        ifname_train = os.path.join(self._opath, fname_train)
-        moa_train = pd.read_csv(ifname_train, index_col=[0], header=0)
+        # Matrix of accuracies
+        #  Row-wise: fold index
+        #  Column-wise: accuracy for given required number of frames with signals.
+        #  Number of columns is number of frames to require.
+        #
+        #  Stack folds depth-wise
 
-        # Number of frames required at the chosen maximum
-        train_acc_max_ix = np.argmax(moa_train.values, axis=1)
+        lkw = dict(index_col=[0], header=0)
 
-        # Test
-        fname_test = self._fn_fstr_many_moa.format(*self._fn_kw_many_moa(ftype='test'))
-        print 'fname_test:', fname_test
-        ifname_test = os.path.join(self._opath, fname_test)
-        moa_test = pd.read_csv(ifname_test, index_col=[0], header=0)
+        # Containers for the train and test moas
+        shape_coa = (N_folds, N_frames.size, N_qualities)
+        coa_train = np.zeros(shape_coa)
+        coa_test = np.zeros(shape_coa)
+        # Container for the training accuracy argmax indices
+        train_acc_max_ices = np.zeros((N_folds, N_qualities))
+        for quality_ix, cvh in enumerate(cvhelpers):
+            # Train
+            fname_train = cvh._fn_fstr_many_moa.format(*cvh._fn_kw_many_moa(ftype='train'))
+            ifname_train = os.path.join(cvh._opath, fname_train)
+            coa_train[:, :, quality_ix] = pd.read_csv(ifname_train, **lkw).values
 
-        # Get the vector with numbers of required frames
-        # N_frames = moa_train.columns.astype(int)
-        N_frames = np.arange(0, moa_train.shape[1])
+            # Number of frames required at the chosen maximum
+            train_acc_max_ices[:, quality_ix] = np.argmax(moa_train, axis=1)
 
-        # Get the maximum number of frames that can
-        # be required when using this quality
-        cs_frame_count = np.zeros(self._css.size).astype(int)
-        for cs_ix, cs in enumerate(self._css):
-            cs.load_cutoutsio_wrapper()
-            cs.set_quality(self.quality)
-            cs.calibrate()
-            cs_frame_count[cs_ix] = len(cs)
-        N_min_frames = np.min(cs_frame_count)
-        N_max_frames = np.max(cs_frame_count)
+            # Test
+            fname_test = cvh._fn_fstr_many_moa.format(*cvh._fn_kw_many_moa(ftype='test'))
+            ifname_test = os.path.join(cvh._opath, fname_test)
+            coa_test[:, :, quality_ix] = pd.read_csv(ifname_test, **lkw).values
 
-        # Extract chosen parameters
-        centroids = self._get_centroids()
+        # Extract chosen parameters (from the training accuracies)
+        # This is a list of N_quality lists with N_folds parameter pairs
+        centroids_list = [cvh._get_centroids() for cvh in cvhelpers]
 
-        # Plot settings
-        # -------------
+        # Get parameters to plot
 
-        colors = mpl.rcParams.get('axes.color_cycle')
+        # For each quality, there are N_fold parameter triples
+        # Create empty list container for the tuples of parameter vectors
+        # (each vector has N_folds dimensions)
+        triple_pars_train = []
+        # Transpose train_acc_max_ices to loop over the qualities as rows
+        # each row will then contain a two-tuple of parameter pairs
+        # (sigma, tau), one column for each fold.
+        izip = zip(centroids_list, train_acc_max_ices.T)
+        for quality_ix, (centroids, vec_nu) in enumerate(izip):
+            vec_sigma, vec_tau = np.array([]), np.array([])
+            for fold_ix in range(N_folds):
+                sigma_ix, tau_ix = centroids[fold_ix]
+                vec_sigma = np.append(vec_sigma, sigmas[sigma_ix])
+                vec_tau = np.append(vec_tau, taus[tau_ix])
+            triple_pars_train.append((vec_sigma, vec_tau, vec_nu))
 
-        # pkw = dict(lw=3, c=colors[0])
-        inkw = dict(ls='none', marker='.', ms=8, mec='none', c=colors[4])
-        # Make the point visible outside the axes extent,
-        # and put it on top of everythin else in the axes instance
-        inkw.update(clip_on=False, zorder=100)
-        # bboxkw = dict(facecolor='#efefef', edgecolor='#cccccc', pad=10.0)
-        # bboxkw = dict()
-        bboxkw = dict(facecolor='w', alpha=.8)
-        tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
-        fstr1 = r'\sigma = {:.2f}'
-        fstr2 = r'\tau = {:.2f}'
-        fstr3 = r'Train max (\nu = {: >2d})'
-        # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
-        # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
-        # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
-        # fstr = r'\sigma = {:.2f}' + '\n' + r'\tau = {:.2f}'
-        # s4 = fstr4.format(N_min_frames)
-        # s5 = fstr5.format(N_max_frames)
-        print 'Min-Max:', N_min_frames
-        print 'Max-Max:', N_max_frames
+        # Plot
+        c = colors[0]
+        p2kw = dict(alpha=.8, lw=1, c=darken(c))
+        p3kw = dict(alpha=.8, marker='o', ms=5, c=c, mec='none')
+        mss = [5] * 3
 
-        # Labels
-        xlabel = rmath(r'\nu / Minimum required number of frames with a signal')
+        fig = plt.figure(figsize=(12., 4))
 
-        # Legend
-        legkw = dict(ncol=4)
-        # legkw = dict(ncol=4, loc='upper left')
-        legalph = .8
+        for ax_ix in range(N_qualities):
+            ax = fig.add_subplot(1, N_qualities, 1 + ax_ix, projection='3d')
 
-        # Limits
-        xmin, xmax = np.min(N_frames), np.max(N_frames)
-        ymin, ymax = .4, .6
-
-        # Accuracies
-        # ----------
-
-        # Create the figure and axes
-        fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
-        fig, axes = plt.subplots(N_folds, 1, **fkw)
-
-        # Plot data on each axis
-        insert_data = []
-        for fold_ix, ax in enumerate(axes.flat):
-
-            if fold_ix == 0:
-                ax.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
-
-            # Add the accuracy lines
-
-            # ax.plot(N_frames, moa_train.values[fold_ix, :], **pkw)
-            ax.plot(N_frames, moa_train.values[fold_ix, :], label=rmath('Train'))
-            ax.plot(N_frames, moa_test.values[fold_ix, :], label=rmath('Test'))
-            N_frames_best = train_acc_max_ix[fold_ix]
-            s3 = fstr3.format(N_frames_best)
-            ax.axvline(x=N_frames_best, c='k', label=rmath(s3))
-            ax.axvline(x=N_min_frames, c='r') #, label=rmath(s4))
-            ax.axvline(x=N_max_frames, c='r') #, label=rmath(s5))
-            # print ax.bbox
-
-            # Display the values of \sigma and \tau
-
-            fnum = fold_ix + 1
-            sigma_ix, tau_ix = centroids[fold_ix]
-            sigma, tau = self.xp.sigmas[sigma_ix], self.xp.taus[tau_ix]
-
-            # Save handles and data until after tightening the figure layout
-            insert_data.append((ax, sigma, tau))
-
-            # Write data out immediately
-            s1 = rmath(fstr1.format(sigma))
-            s2 = rmath(fstr2.format(tau))
-            # s = '{}\n\{}'.format(s1, s2)
-            # s = rmath(fstr.format(sigma, tau))
-            # y = ax.get_position().ymin + .01
-            ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
-            ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
-
-            # ax.legend(ncol=3)
-            leg = ax.legend(**legkw)
-            leg.get_frame().set_alpha(legalph)
-            ax2 = ax.twinx()
-            ax.set_ylabel(rmath('Accuracy'))
-            ax2.set_ylabel(rmath('Fold {}'.format(fnum)))
-
-            # ax.set_yticks([.0, .5, 1.])
-            ax2.set_yticks([])
-
-        ax.set_xlabel(xlabel)
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
+            ss, ts, ns = triple_pars_train[ax_ix]
+            for xi, yi, zi, ms in zip(ss, ts, ns, mss):
+                x = [xi] * 2
+                y = [yi] * 2
+                z = [0, zi]
+                ax.plot3D(x, y, z, **p2kw)
+                # p3kw.update(ms=ms)
+                ax.plot3D([xi], [yi], [zi], **p3kw)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_zticks([])
 
         fig.tight_layout()
-
-        # Add insert axes (after the change in fig.transFigure from calling fig.tight_layout())
-        fig_w, fig_h = fig.get_size_inches()
-        fig_w2h = float(fig_w) / fig_h
-        sz = .035
-        l, w, h = .85, sz, sz * fig_w2h
-        for ax, sigma, tau in insert_data:
-            b = ax.get_position().ymin + .015
-            axin = fig.add_axes([l, b, w, h])
-            axin.plot([tau], [sigma], **inkw)
-            # axin.set_ylabel(rmath(r'\sigma'))
-            # axin.set_xlabel(rmath(r'\tau'))
-            axin.set_ylim(*self.xp.sigmas[[0, -1]])
-            axin.set_xlim(*self.xp.taus[[0, -1]])
-            axin.set_xticks([])
-            axin.set_yticks([])
-
-        fname = 'moa_E-{}_Q-{}_CV-{}.pdf'.format(self.xp.name, qstr, N_folds)
+        fname = 'params_E-{}_Q-all_train.pdf'.format(self.xp.name)
         ofname = os.path.join(self._opath, fname)
         plt.savefig(ofname)
         plt.close(fig)
-
-        # MEAN accuracies
-        # ---------------
-
-        # Take the mean accuracy over the folds for each fold type
-        acc_mean_train = moa_train.values.mean(axis=0)
-        acc_mean_test = moa_test.values.mean(axis=0)
-
-        # And their standard deviations
-        acc_std_train = moa_train.values.std(axis=0)
-        acc_std_test = moa_test.values.std(axis=0)
-
-        # Create the figure and axes
-        fkw = dict(sharex=True, sharey=True, figsize=(13., 4))
-        fig, (ax1, ax2) = plt.subplots(2, 1, **fkw)
-
-        ax1.set_title(rmath('Quality combination: {}'.format(qstr)), fontsize=18)
-
-        # Add the best accuracy lines for each fold
-
-        # And mark the best accuracy when using the mean accuracies
-
-        fbkw = dict(facecolor=colors[0], alpha=.5)
-
-        ax1.plot(N_frames, acc_mean_train, label=rmath('Train'))
-        ax1.fill_between(N_frames, acc_mean_train + acc_std_train, acc_mean_train, **fbkw)
-        ax1.fill_between(N_frames, acc_mean_train - acc_std_train, acc_mean_train, **fbkw)
-
-        ax2.plot(N_frames, acc_mean_test, label=rmath('Test'))
-        ax2.fill_between(N_frames, acc_mean_test + acc_std_test, acc_mean_test, **fbkw)
-        ax2.fill_between(N_frames, acc_mean_test - acc_std_test, acc_mean_test, **fbkw)
-
-        for ax in (ax1, ax2):
-            leg = ax.legend(**legkw)
-            leg.get_frame().set_alpha(legalph)
-            ax.set_ylabel(rmath('Accuracy'))
-
-        ax2.set_xlabel(xlabel)
-        ax2.set_xlim(xmin, xmax)
-        ax2.set_ylim(ymin, ymax)
-
-        fig.tight_layout()
-        fname = 'moa_E-{}_Q-{}_CV-{}_mean.pdf'.format(self.xp.name, qstr, N_folds)
-        ofname = os.path.join(self._opath, fname)
-        plt.savefig(ofname)
-        plt.close(fig)
-
-    def _plot_results_manyc(self): self._plot_results_many()
 
     # Analysis
     # --------
@@ -2229,6 +2383,9 @@ class CVHelper(object):
         self.save_predictions(predictions, labels)
 
     def save_predictions(self, predictions, labels):
+        """Save the predictions for a given experiment.
+
+        These can later be loaded and used to create a confusion matrix"""
 
         predictions = np.asarray(predictions)
         labels = np.asarray(labels)
@@ -2253,14 +2410,8 @@ def get_mean_table_of_confusion(predictions, labels, classes):
 
     # Get cube of confusion matrices
     coc = confusion_cube(predictions, labels, classes)
-    print 'coc.shape =', coc.shape
-    # print 'coc[:, :, 0]:'
-    # print coc[:, :, 0]
 
-    # print labels[0]
-    # print predictions[0]
-    # raise SystemExit
-
+    # Summary stats
     mean = coc.mean(axis=2)
     std = coc.std(axis=2)
     err = std / np.sqrt(coc.shape[2])

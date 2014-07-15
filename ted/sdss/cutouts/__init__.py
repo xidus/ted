@@ -1428,6 +1428,59 @@ wcsremap \
             # Calibrate the data used for the subsequent analysis
             self.calibrate()
 
+    def load_raw_cutouts(self):
+        """
+        Load raw cutouts based on the list of usable filenames for the
+        registered cutouts.
+
+        Assumptions
+        -----------
+        The process of loading the registered cutouts one by one
+        and flagging corrupt, registered cutouts has been performed.
+        The list of filenames for usable AND registered cutouts is
+        thus also a representaiton of cutouts which in raw form should
+        be non-corrupt, since a usable, registered cutout would not be
+        usable if the orginal was not.
+
+        Side effects
+        ------------
+        self.cube_raw : 3D-array
+            Data cube containing the raw cutout frames.
+        self._cube_raw : 3D-array
+            Data cube containing the *unclipped* raw cutout frames.
+
+        """
+
+        # list of files to load
+        files = self.load_cutoutsio()
+        files = self.select_by_chosen_quality(files)
+        files = self.select_usable(files)
+
+        # Save the full images so that view can be changed during runtime.
+        self._cube_raw = np.zeros(self.size + (files.shape[0],))
+        for i in range(files.shape[0]):
+
+            ifname, qflag, uflag = files.iloc[i]
+            ifname = ifname.replace('fit', 'fit.gz').replace('wcsremap', 'fit.gz')
+            hdulist = fits.open(ifname)
+
+            try:
+                self._cube_raw[:, :, i] = hdulist[0].data
+
+            except Exception as err:
+                print 'Exception at i = {: >3d}:'.format(i), err.message
+
+            finally:
+                hdulist.close()
+
+        # Attach `files` to the instance
+        if '_files' not in dir(self):
+            self._files = files
+        # self._qualities = files.quality.values
+
+        # Calibrate the data used for the subsequent analysis
+        self.calibrate()
+
     def calibrate(self, quality=None, clip=None):
         """
         Calibrate the data used for analysis
@@ -1461,6 +1514,9 @@ wcsremap \
 
         # Save the stuff that is used in the analysis
         # self.cube_remap = self.get_view(self._cube_remap[:, :, qix], clip=clip)
+        if '_cube_raw' in dir(self):
+            self.cube_raw = self.get_view(
+                self._cube_raw[:, :, qix], clip=clip)
         if '_cube_remap' in dir(self):
             self.cube_remap = self.get_view(
                 self._cube_remap[:, :, qix], clip=clip)
@@ -1738,6 +1794,27 @@ wcsremap \
         # Sum cube_threshold along both image axes and return indices of
         # entries in resulting vector with non-zero sum.
         return (self.cube_threshold.sum(axis=0).sum(axis=0) > 0).nonzero()[0]
+
+    @property
+    def signals(self):
+        """
+        Signal vector
+
+        Returns
+        -------
+        None : NoneType
+            If `cube_threshold` has not been created, return None instead.
+        V : int, 1D-array
+            Vector of same length as the currently used cutouts.
+            The entries consist of number of found signals found in the
+            thresholded cutout frame at the same position in the stack.
+
+        """
+        if 'cube_threshold' not in dir(self):
+            return None
+        # Sum cube_threshold along both image axes and return
+        # the resulting vector of signal counts for each cutout
+        return self.cube_threshold.sum(axis=0).sum(axis=0)
 
     def report_signals(self):
         """
