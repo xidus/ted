@@ -1853,9 +1853,9 @@ class CVHelper(object):
 
         # Plot
         linekw = dict(alpha=.8, lw=3)
-        pointkw = dict(alpha=.8, marker='o', ms=5, mec='none')
+        pointkw = dict(alpha=.8, marker='H', ms=10, mec='none')
 
-        fig = plt.figure(figsize=(12., 2.5))
+        fig = plt.figure(figsize=(12., 2.))
 
         for ax_ix in range(N_qualities):
             ax = fig.add_subplot(1, N_qualities, 1 + ax_ix, projection='3d')
