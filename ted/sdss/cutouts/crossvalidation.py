@@ -1737,7 +1737,8 @@ class CVHelper(object):
         from mplconf import rmath
         # from aux import darken
 
-        mplrc('publish_digital')
+        # mplrc('publish_digital')
+        mplrc('publish_printed')
         colors = mpl.rcParams.get('axes.color_cycle')
 
         """
@@ -1775,27 +1776,16 @@ class CVHelper(object):
         # This is the number of minimum number of frames
         # that a cutout sequence in the current tlist has.
         N_max_frames = np.min([len(cs) for cs in self._css])
-        # cs_frame_count = np.zeros(self._css.size).astype(int)
-        # for cs_ix, cs in enumerate(self._css):
-        #     cs.load_cutoutsio_wrapper()
-        #     cs.set_quality([1, 2, 3])
-        #     cs.calibrate()
-        #     cs_frame_count[cs_ix] = len(cs)
-        #     # The weird thing seems to be that the resulting accuracy-vs-nframes-required
-        #     # all happen when quality 2 is involved, which should give a longer N_frames vector than all other combinations that are not 123.
-        # N_max_frames = np.min(cs_frame_count)
 
         # Get vector of N frames to require
         N_frames = np.arange(0, N_max_frames + 1)
 
         # Load data
-        # --
 
         # Matrix of accuracies
         #  Row-wise: fold index
         #  Column-wise: accuracy for given required number of frames with signals.
         #  Number of columns is number of frames to require.
-        #
         #  Stack folds depth-wise
 
         lkw = dict(index_col=[0], header=0)
@@ -1852,8 +1842,8 @@ class CVHelper(object):
         np.save(ofname, np.asarray(triple_pars_train))
 
         # Plot
-        linekw = dict(alpha=.8, lw=3)
-        pointkw = dict(alpha=.8, marker='H', ms=10, mec='none')
+        linekw = dict(alpha=.8, lw=1.5)
+        # pointkw = dict(alpha=.8, marker='H', ms=10, mec='none')
         sigma_lim = sigmas.min(), sigmas.max()
         tau_lim = taus.min(), taus.max()
         nu_lim = N_frames.min(), N_frames.max()
@@ -1870,9 +1860,9 @@ class CVHelper(object):
                 y = [yi] * 2
                 z = [0, zi]
                 linekw.update(c=c)
-                pointkw.update(c=c)
+                # pointkw.update(c=c)
                 ax.plot3D(x, y, z, **linekw)
-                ax.plot3D([xi], [yi], [zi], **pointkw)
+                # ax.plot3D([xi], [yi], [zi], **pointkw)
 
             ax.set_xlim(*sigma_lim)
             ax.set_ylim(*tau_lim)
