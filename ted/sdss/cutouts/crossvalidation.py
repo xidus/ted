@@ -1876,6 +1876,8 @@ class CVHelper(object):
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             ax.set_zticklabels([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
 
             # for coord in ('x', 'y', 'z'):
             #     ax.locator_params(axis=coord, nbins=4)
