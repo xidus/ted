@@ -1871,9 +1871,15 @@ class CVHelper(object):
                 ax.plot3D(x, y, z, **linekw)
                 ax.plot3D([xi], [yi], [zi], **pointkw)
 
-            ax.set_xticks([])
-            ax.set_yticks([])
-            ax.set_zticks([])
+            # ax.set_xticks([])
+            # ax.set_yticks([])
+            # ax.set_zticks([])
+            ax.set_xticks(np.unique(ss))
+            ax.set_yticks(np.unique(ts))
+            ax.set_zticks(np.unique(ns))
+
+            # for coord in ('x', 'y', 'z'):
+            #     ax.locator_params(axis=coord, nbins=4)
 
             ax.set_title(rmath(qstrs[ax_ix]))
             ax.set_xlabel(r'$\sigma$')
