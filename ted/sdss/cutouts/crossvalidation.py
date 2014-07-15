@@ -1735,7 +1735,7 @@ class CVHelper(object):
 
         from mplconf import mplrc
         from mplconf import rmath
-        from aux import darken
+        # from aux import darken
 
         mplrc('publish_digital')
         colors = mpl.rcParams.get('axes.color_cycle')
@@ -1748,8 +1748,8 @@ class CVHelper(object):
         sigmas = self.xp.sigmas
         taus = self.xp.taus
 
-        N_sigmas = sigmas.size
-        N_taus = taus.size
+        # N_sigmas = sigmas.size
+        # N_taus = taus.size
 
         """
         Get the data for each quality combination (seven in all)
@@ -1769,7 +1769,7 @@ class CVHelper(object):
             for q in qualities]
 
         # Get quality strings
-        qstrs = [self._qstr(q) for q in qualities]
+        # qstrs = [self._qstr(q) for q in qualities]
 
         # Get the maximum number of frames to require.
         # This is the number of minimum number of frames
@@ -1810,7 +1810,8 @@ class CVHelper(object):
             # Train
             fname_train = cvh._fn_fstr_many_moa.format(*cvh._fn_kw_many_moa(ftype='train'))
             ifname_train = os.path.join(cvh._opath, fname_train)
-            coa_train[:, :, quality_ix] = pd.read_csv(ifname_train, **lkw).values
+            moa_train = pd.read_csv(ifname_train, **lkw).values
+            coa_train[:, :, quality_ix] = moa_train
 
             # Number of frames required at the chosen maximum
             train_acc_max_ices[:, quality_ix] = np.argmax(moa_train, axis=1)
@@ -1842,28 +1843,41 @@ class CVHelper(object):
                 vec_tau = np.append(vec_tau, taus[tau_ix])
             triple_pars_train.append((vec_sigma, vec_tau, vec_nu))
 
+        # Save it for later
+        fname = 'params_E-{}_Q-all_train.npy'.format(self.xp.name)
+        ofname = os.path.join(self._opath, fname)
+        # row-wise: quality index
+        # column-wise: parameter index; order: (sigma, tau, nu)
+        # depth-wise: fold index
+        np.save(ofname, np.asarray(triple_pars_train))
+
         # Plot
-        c = colors[0]
-        p2kw = dict(alpha=.8, lw=1, c=darken(c))
-        p3kw = dict(alpha=.8, marker='o', ms=5, c=c, mec='none')
-        mss = [5] * 3
+        linekw = dict(alpha=.8, lw=3)
+        pointkw = dict(alpha=.8, marker='o', ms=5, mec='none')
 
         fig = plt.figure(figsize=(12., 4))
 
         for ax_ix in range(N_qualities):
             ax = fig.add_subplot(1, N_qualities, 1 + ax_ix, projection='3d')
 
+            # Extract vectors for sigma, tau, nu
             ss, ts, ns = triple_pars_train[ax_ix]
-            for xi, yi, zi, ms in zip(ss, ts, ns, mss):
+            for xi, yi, zi, c in zip(ss, ts, ns, colors[:N_folds]):
                 x = [xi] * 2
                 y = [yi] * 2
                 z = [0, zi]
-                ax.plot3D(x, y, z, **p2kw)
-                # p3kw.update(ms=ms)
-                ax.plot3D([xi], [yi], [zi], **p3kw)
+                linekw.update(c=c)
+                pointkw.update(c=c)
+                ax.plot3D(x, y, z, **linekw)
+                ax.plot3D([xi], [yi], [zi], **pointkw)
+
             ax.set_xticks([])
             ax.set_yticks([])
             ax.set_zticks([])
+
+            ax.set_xlabel(r'$\sigma$')
+            ax.set_ylabel(r'$\tau$')
+            ax.set_zlabel(r'$\nu$')
 
         fig.tight_layout()
         fname = 'params_E-{}_Q-all_train.pdf'.format(self.xp.name)
