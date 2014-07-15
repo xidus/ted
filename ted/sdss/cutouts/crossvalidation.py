@@ -1769,7 +1769,7 @@ class CVHelper(object):
             for q in qualities]
 
         # Get quality strings
-        # qstrs = [self._qstr(q) for q in qualities]
+        qstrs = [self._qstr(q) for q in qualities]
 
         # Get the maximum number of frames to require.
         # This is the number of minimum number of frames
@@ -1855,7 +1855,7 @@ class CVHelper(object):
         linekw = dict(alpha=.8, lw=3)
         pointkw = dict(alpha=.8, marker='o', ms=5, mec='none')
 
-        fig = plt.figure(figsize=(12., 4))
+        fig = plt.figure(figsize=(12., 2.5))
 
         for ax_ix in range(N_qualities):
             ax = fig.add_subplot(1, N_qualities, 1 + ax_ix, projection='3d')
@@ -1875,6 +1875,7 @@ class CVHelper(object):
             ax.set_yticks([])
             ax.set_zticks([])
 
+            ax.set_title(rmath(qstrs[ax_ix]))
             ax.set_xlabel(r'$\sigma$')
             ax.set_ylabel(r'$\tau$')
             ax.set_zlabel(r'$\nu$')
