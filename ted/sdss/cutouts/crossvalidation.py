@@ -1873,6 +1873,9 @@ class CVHelper(object):
             ax.set_xticks(np.unique(ss))
             ax.set_yticks(np.unique(ts))
             ax.set_zticks(np.unique(ns))
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_zticklabels([])
 
             # for coord in ('x', 'y', 'z'):
             #     ax.locator_params(axis=coord, nbins=4)
