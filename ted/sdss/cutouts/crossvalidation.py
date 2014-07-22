@@ -1866,7 +1866,10 @@ class CVHelper(object):
 
             ax.set_xlim(*sigma_lim)
             ax.set_ylim(*tau_lim)
-            ax.set_zlim(*nu_lim)
+            # ax.set_zlim(*nu_lim)
+            # 11 is max nu found in MANY/C (MANY q-13)
+            ax.set_zlim(0, 11)
+
             # ax.set_xticks([])
             # ax.set_yticks([])
             # ax.set_zticks([])
