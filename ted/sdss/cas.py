@@ -917,27 +917,37 @@ def filter_invalid_from_unique_field_list(dra_min=.1, dra_max=1.):
     df = pd.read_csv(fname, sep=',')
 
     """
-    2014-03-22
+    2014-07-28
     ----------
-    There may be some errors in this procedure.
-    Some dra may be negative because raMax is just above 0 degrees, and raMin
-    is just below 360 deg. My general subtraction procedure in the IPython
-    notebook (stripe82_stats.ipynb) may be flawed, even though I meant for it
-    to counter this particular problem.
-        At this point, the frames have been downloaded, and the cutouts have
-    been made, so it may be a waste of time to download further 1026 frames
-    and include them in the cutout-sequnces.
-        The 1026 'invalid' entries that could potentially be made valid again
-    include coadded entries and many entries with a BAD quality flag.
-        Getting to know the data is apparently a back-and-forth procedure in
-    terms of understanding how to code up the algorithms that make use of them.
+    There is an error in this procedure, but the result is the intended:
+    to remove fields for which the physical extent---as given by the
+    coordinates raMax, raMin, decMax, decMin---gives too small or even
+    negative side lengths. This problem is only observed in the RA
+    coordinates.
 
-    There is a big difference bwteeen what input is used here compared to the
-    way that I check for discrepancies in the original notebook.
+    The are five observed cases for where the RA coordinate extents land.
 
-    In the notebook, I first subtract 360.0 from the coordinates, RIGHT? (I still seem to get the same number of invalids...)
+    Case 1: raMax \in [  0;  60] and raMin \in [  0;  60]
+    Case 2: raMax \in [  0;  60] and raMin \in [300; 360]
+    Case 3: raMax \in [300; 360] and raMin \in [300; 360]
+    Case 4: raMax \in [  0;  60] and raMin \in [300; 360]
+    Case 5: raMax > 360          and raMin \in [  0;  60]
 
-    Add to Mistakes unmendable / or mendable mistakes if time.
+    Case 4 should not occur, since this means that the field is obtained
+    end-first and beginning-last. These fields are considered invalid.
+
+    Case 5 is OK, if subtracting 360 deg from raMax, the value is larger
+    than raMin. Otherwise, the coordinate difference produces a negative
+    side length again.
+      It turns out that this is the case, so these fields are also invalid.
+
+    The procedure below removes all fields for which the coordinate difference
+    raMax - raMin < dra_min = .1 (default). Since this also removes all Case-4
+    and Case-5 records above, the result is what is intended; but with wrong
+    assumptions.
+
+    Since this is the way that my data were processed, I leave it at that,
+    if I need to reproduce the field list again.
 
     """
 
