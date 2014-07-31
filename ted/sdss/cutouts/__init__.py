@@ -1654,8 +1654,6 @@ wcsremap \
 
         return predictions
 
-    def gridsearch_any2(self, sigmas, taus): self.gridsearch_any(sigmas, taus)
-
     def gridsearch_blr(self, sigmas, taus):
         """Baseline experiment using random predictions"""
         predictions = (np.random.random(size=(sigmas.size, taus.size)) >= .5)
@@ -1673,10 +1671,6 @@ wcsremap \
         predictions = np.zeros((sigmas.size, taus.size)).astype(bool)
         self.save_predictions(predictions)
         return predictions
-
-    def gridsearch_blr2(self, sigmas, taus): self.gridsearch_blr(sigmas, taus)
-    def gridsearch_bla2(self, sigmas, taus): self.gridsearch_bla(sigmas, taus)
-    def gridsearch_bln2(self, sigmas, taus): self.gridsearch_bln(sigmas, taus)
 
     # Grid search I/O
     # ---------------
