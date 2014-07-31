@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 
 from .. import env
+from .. import _pkg_home_dir
 from ..parse import ra2deg, dec2deg
 
 _path_data = env.paths.get('data')
@@ -38,6 +39,11 @@ _path_sql = env.paths.get('sql')
 
 _proxies = env.proxies
 
+# Add locations of snlists
+env.files['snlist_902'] = os.path.join(
+            _pkg_home_dir, 'sdss', 'data', 'snlist_confirmed.csv')
+env.files['snlist_1030'] = os.path.join(
+            _pkg_home_dir, 'sdss', 'data', 'snlist_confirmed_updated.csv')
 
 """
 Content
@@ -62,9 +68,7 @@ def iscoadded(run):
 
 ###############################################################################
 def URI_exists(uri):
-    # import requests
-    response = requests.head(uri)
-    return response.status_code in (200, 302)
+    return requests.head(uri).status_code in (200, 302)
 
 
 ###############################################################################

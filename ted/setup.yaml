@@ -21,8 +21,9 @@ files:
   # Source candidate lists
   # ----------------------
 
-  snlist_1030: [*data, snlists, snlist_confirmed_updated.csv]
-  snlist_902: [*data, snlists, snlist_confirmed.csv]
+  # Part of the package data. Now added upon loading the sdss sub module.
+  # snlist_1030: [*data, snlists, snlist_confirmed_updated.csv]
+  # snlist_902: [*data, snlists, snlist_confirmed.csv]
 
   # SQLite3
   db: [*data, sqlite, ted.db]
