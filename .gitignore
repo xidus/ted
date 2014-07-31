@@ -3,6 +3,7 @@
 .gitconfig
 
 archive/
+ted/pipe/
 ted/env.yaml
 ted/base.yaml
 
