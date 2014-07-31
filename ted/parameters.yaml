@@ -80,23 +80,6 @@ xp:
       stop: 1.
       step: .005
 
-  # Experiment 1 -- new grid on the bloc
-  any2:
-
-    # Scale to smooth to
-    # Type :: dict
-    sigmas: &sigmas2
-      start: 3
-      stop: 15
-      num: 13
-
-    # Relative thresholds
-    # Type :: dict
-    taus: &taus2
-      start: .7
-      stop: .995
-      num: 21
-
   # Experiment 2
   many:
 
@@ -127,21 +110,3 @@ xp:
   bln:
     sigmas: *sigmas
     taus: *taus
-
-  # BASELINE EXPERIMENT -- new grid on the bloc
-  # -------------------
-
-  # RANDOM 2
-  blr2:
-    sigmas: *sigmas2
-    taus: *taus2
-
-  # ALWAYS 2
-  bla2:
-    sigmas: *sigmas2
-    taus: *taus2
-
-  # NEVER 2
-  bln2:
-    sigmas: *sigmas2
-    taus: *taus2
