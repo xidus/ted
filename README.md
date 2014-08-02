@@ -35,7 +35,7 @@ To do so, copy the file `base.default.yaml` to `base.yaml` and edit the paths in
 
 I have written a control script which makes it possible to use TED from the command line.
 
-This script is available at [`ted-control`](#)
+This script is available at [`ted-control`](https://github.com/xidus/ted-control)
 
 
 ---
