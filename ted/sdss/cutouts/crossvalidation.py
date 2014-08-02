@@ -147,19 +147,11 @@ class CVHelper(object):
             moa_test = self._moa(cop_test, test_l)
             self._save_fold_results_moa(moa=moa_test, ftype='test', fnum=fnum)
 
-    # ANY2
-
-    def _cv_any2(self): self._cv_any()
-
     # BASELINE
 
     def _cv_blr(self): self._cv_baseline()
     def _cv_bla(self): self._cv_baseline()
     def _cv_bln(self): self._cv_baseline()
-
-    def _cv_blr2(self): self._cv_baseline()
-    def _cv_bla2(self): self._cv_baseline()
-    def _cv_bln2(self): self._cv_baseline()
 
     def _cv_baseline(self):
 
@@ -235,10 +227,6 @@ class CVHelper(object):
             # Save the results
             self._save_fold_results_signals(signals_train, ftype='train', fnum=fnum)
             self._save_fold_results_signals(signals_test, ftype='test', fnum=fnum)
-
-    # MANY2
-
-    def _cv_many2(self): self._cv_many()
 
     # Grid search
     # -----------
@@ -529,15 +517,10 @@ class CVHelper(object):
         getattr(self, '_plot_results_' + self.xp.name)()
 
     def _plot_results_any(self): self._plot_results_accuracies()
-    def _plot_results_any2(self): self._plot_results_accuracies()
 
     def _plot_results_blr(self): self._plot_results_accuracies()
     def _plot_results_bla(self): self._plot_results_accuracies()
     def _plot_results_bln(self): self._plot_results_accuracies()
-
-    def _plot_results_blr2(self): self._plot_results_accuracies()
-    def _plot_results_bla2(self): self._plot_results_accuracies()
-    def _plot_results_bln2(self): self._plot_results_accuracies()
 
     def _plot_results_accuracies(self):
         """Plot results for experiment ANY and BASELINE experiments"""
@@ -1070,20 +1053,16 @@ class CVHelper(object):
     def _plot_all_bla(self): self._plot_baseline()
     def _plot_all_bln(self): self._plot_baseline()
 
-    def _plot_all_blr2(self): self._plot_baseline()
-    def _plot_all_bla2(self): self._plot_baseline()
-    def _plot_all_bln2(self): self._plot_baseline()
-
     def _plot_compound(self):
         """
         Plot compound plots for 5-fold validation
-        results for experiments ANY2? and BL[RAN]2?"""
+        results for experiments ANY and BL[RAN]"""
 
         available_experiments = (
-            'any', 'any2',
-            'blr', 'blr2',
-            'bla', 'bla2',
-            'bln', 'bln2'
+            'any',
+            'blr',
+            'bla',
+            'bln'
         )
         if self.xp.name not in available_experiments:
             print 'Not available for experiment', self.xp.name, '...'
@@ -1409,7 +1388,7 @@ class CVHelper(object):
     def _plot_baseline(self):
         """
         Plot compound plots for 5-fold validation
-        results for experiments BL[RAN]2?
+        results for experiments BL[RAN]
         """
 
         import matplotlib as mpl; mpl.use('pdf')
@@ -1904,15 +1883,10 @@ class CVHelper(object):
         getattr(self, '_analyse_' + self.xp.name)()
 
     def _analyse_any(self): self._analyse_simple()
-    def _analyse_any2(self): self._analyse_simple()
 
     def _analyse_blr(self): self._analyse_simple() # baseline()
     def _analyse_bla(self): self._analyse_simple() # baseline()
     def _analyse_bln(self): self._analyse_simple() # baseline()
-
-    def _analyse_blr2(self): self._analyse_simple() # baseline()
-    def _analyse_bla2(self): self._analyse_simple() # baseline()
-    def _analyse_bln2(self): self._analyse_simple() # baseline()
 
     def _analyse_simple(self):
         """Analyse results for experiments (ANY|BL[RAN])2?"""
