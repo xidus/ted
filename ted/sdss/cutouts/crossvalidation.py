@@ -1715,8 +1715,7 @@ class CVHelper(object):
         from mplconf import rmath
         # from aux import darken
 
-        # mplrc('publish_digital')
-        mplrc('publish_printed')
+        mplrc('publish_digital')
         colors = mpl.rcParams.get('axes.color_cycle')
 
         """
@@ -1889,7 +1888,7 @@ class CVHelper(object):
         ymin, ymax = .4, .6
 
         # Create the figure and axes
-        fkw = dict(sharex=True, sharey=True, figsize=(13., 8.))
+        fkw = dict(sharex=True, sharey=True, figsize=(13., 13.))
         fig, axes = plt.subplots(N_qualities, 1, **fkw)
 
         # Plot data on each axis
@@ -1951,7 +1950,7 @@ class CVHelper(object):
             ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
             ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
 
-            leg = ax.legend(**legkw)
+            ax.legend(**legkw)
             ax2 = ax.twinx()
             ax.set_ylabel(rmath('Accuracy'))
             ax2.set_ylabel(rmath('Quality: {}'.format(qstrs[quality_ix])))
@@ -1982,6 +1981,7 @@ class CVHelper(object):
 
         fname = 'moa_E-{}_Q-all_CV-{}_mean.pdf'.format(self.xp.name, N_folds)
         ofname = os.path.join(self._opath, fname)
+        print 'Saving figure', fname
         plt.savefig(ofname)
         plt.close(fig)
 
