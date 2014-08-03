@@ -1866,7 +1866,7 @@ class CVHelper(object):
         tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
         fstr1 = r'\sigma = {:.2f} \pm {:.2f}'
         fstr2 = r'\tau = {:.2f} \pm {:.2f}'
-        # fstr3 = r'Train max (\nu = {: >2d})'
+        fstr3 = r'\nu_\text{{\textsc{{train}}}} = {: >2d} \pm {: >2d}'
         # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
         # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
         # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
@@ -1882,6 +1882,11 @@ class CVHelper(object):
         # Legend
         legkw = dict(ncol=4, framealpha=.8)
         # legkw = dict(ncol=4, framealpha=.8, loc='upper left')
+
+        # Annotation
+        # arrowprops = dict(arrowstyle='->', ec='k', lw=2)
+        # annkw = dict(xycoords='data', size=15, arrowprops=arrowprops)
+        # annfstr = r'$({:.2f},\ \log({:.2f}))$'
 
         # Limits
         xmin, xmax = np.min(N_frames), np.max(N_frames)
@@ -1911,21 +1916,38 @@ class CVHelper(object):
                 acc_std_test[quality_ix, :],
                 ]
 
-            izip = zip([acc_train, acc_test], ['Train', 'Test'], colors)
-            for acc, label, c in izip:
+            # izip = zip([acc_train, acc_test], ['Train', 'Test'], colors)
+            # for acc, label, c in izip:
 
-                fbkw = dict(facecolor=c, alpha=.5)
+            #     fbkw = dict(facecolor=c, alpha=.5)
 
-                ax.plot(N_frames, acc[0], label=rmath(label), c=c, alpha=.8)
-                ax.fill_between(N_frames, acc[0] + acc[1], acc[0], **fbkw)
-                ax.fill_between(N_frames, acc[0] - acc[1], acc[0], **fbkw)
+            #     ax.plot(N_frames, acc[0], label=rmath(label), c=c, alpha=.8)
+            #     ax.fill_between(N_frames, acc[0] + acc[1], acc[0], **fbkw)
+            #     ax.fill_between(N_frames, acc[0] - acc[1], acc[0], **fbkw)
 
-                for fold_ix, Nfbest in enumerate(train_acc_max_ices[:, quality_ix]):
-                    ax.axvline(x=Nfbest, c='k')
+            fbkw1 = dict(facecolor='w', alpha=.5)
+            fbkw2 = dict(facecolor=colors[0], alpha=.5)
+            ax.fill_between(N_frames, acc_test[0] - acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
+            ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
+            ax.plot(N_frames, acc_train[0], label=rmath('Train'), c=colors[0], alpha=.8)
+            ax.plot(N_frames, acc_test[0], label=rmath('Test'), c=colors[1], alpha=.8)
 
-                # Better yet, have arrows pointing towards them
-                ax.axvline(x=fmin[quality_ix], c='#ff4433')
-                ax.axvline(x=fmax[quality_ix], c='#ff4433')
+            # for fold_ix, Nfbest in enumerate(train_acc_max_ices[:, quality_ix]):
+            #     ax.axvline(x=Nfbest, c='k')
+            Nf_mean = train_acc_max_ices[:, quality_ix].mean()
+            Nf_std = train_acc_max_ices[:, quality_ix].std()
+            ax.axvline(x=Nf_mean, c='k', label=rmath(fstr3.format(Nf_mean, Nf_std)))
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std], x2=[Nf_mean] * 2, c='k', alpha=.5)
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std], x2=[Nf_mean] * 2, c='k', alpha=.5)
+
+            # Better yet, have arrows pointing towards them
+            ax.axvline(x=fmin[quality_ix], c='#ff4433', ls='--')
+            ax.axvline(x=fmax[quality_ix], c='#ff4433', ls='--')
+            # ax.annotate(
+            #     s=annfstr.format(fmin[quality_ix]),
+            #     xy=(fmin[quality_ix], .45),
+            #     xytext=(fmin[quality_ix], .45),
+            #     **annkw)
 
             # Display the values of \sigma and \tau
 
@@ -1947,8 +1969,10 @@ class CVHelper(object):
             # Write data out immediately
             s1 = rmath(fstr1.format(*sigma))
             s2 = rmath(fstr2.format(*tau))
-            ax.text(.925, .35, s1, transform=ax.transAxes, **tkw)
-            ax.text(.925, .15, s2, transform=ax.transAxes, **tkw)
+            # tl = .925
+            tl = .875
+            ax.text(tl, .35, s1, transform=ax.transAxes, **tkw)
+            ax.text(tl, .15, s2, transform=ax.transAxes, **tkw)
 
             ax.legend(**legkw)
             ax2 = ax.twinx()
@@ -1966,7 +1990,8 @@ class CVHelper(object):
         fig_w, fig_h = fig.get_size_inches()
         fig_w2h = float(fig_w) / fig_h
         sz = .035
-        l, w, h = .85, sz, sz * fig_w2h
+        # l, w, h = .85, sz, sz * fig_w2h
+        l, w, h = .80, sz, sz * fig_w2h
         for ax, sigma, tau in insert_data:
             b = ax.get_position().ymin + .015
             axin = fig.add_axes([l, b, w, h])
