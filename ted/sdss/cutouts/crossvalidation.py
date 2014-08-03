@@ -1866,7 +1866,7 @@ class CVHelper(object):
         tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
         fstr1 = r'\sigma = {:.2f} \pm {:.2f}'
         fstr2 = r'\tau = {:.2f} \pm {:.2f}'
-        fstr3 = r'\nu_\mathrm{{Train}} = {: >2.0f} \pm {: >2.0f}'
+        fstr3 = r'\nu_\mathrm{{Train}} = {: >4.1f} \pm {: >.1f}'
         # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
         # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
         # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
@@ -1933,8 +1933,10 @@ class CVHelper(object):
             ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
             ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
 
-            # fbkw1 = dict(facecolor='w', alpha=.9)
-            fbkw1 = dict(facecolor='#f9cbd3', alpha=.8)
+            # c_test = 'w'
+            # c_test = '#f9cbd3'
+            c_test = '#f9a3ab'
+            fbkw1 = dict(facecolor=c_test, alpha=.8)
             fbkw2 = dict(facecolor=colors[0], alpha=.5)
             ax.fill_between(N_frames, acc_test[0] + acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
             ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
@@ -1984,6 +1986,8 @@ class CVHelper(object):
         ax.set_xlabel(xlabel)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
+
+        ax.xaxis.set_minor_locator(mpl.ticker.FixedLocator(np.arange(xmin, xmax + 1, 1)))
 
         fig.tight_layout()
 
