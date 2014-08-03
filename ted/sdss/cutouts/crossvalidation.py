@@ -1933,11 +1933,12 @@ class CVHelper(object):
             ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
             ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
 
+            fbkw = dict(edgecolor='none')
             # c_test = 'w'
             # c_test = '#f9cbd3'
             c_test = '#f9a3ab'
-            fbkw1 = dict(facecolor=c_test, alpha=.8)
-            fbkw2 = dict(facecolor=colors[0], alpha=.5)
+            fbkw1 = dict(facecolor=c_test, alpha=.7, **fbkw)
+            fbkw2 = dict(facecolor=colors[0], alpha=.5, **fbkw)
             ax.fill_between(N_frames, acc_test[0] + acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
             ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
             ax.plot(N_frames, acc_train[0], label=rmath('Train'), c=colors[0], alpha=.8)
@@ -1977,6 +1978,7 @@ class CVHelper(object):
             ax.text(tl, .35, s1, transform=ax.transAxes, **tkw)
             ax.text(tl, .15, s2, transform=ax.transAxes, **tkw)
 
+            ax.grid(b=False, which='minor')
             ax.legend(**legkw)
             ax2 = ax.twinx()
             ax.set_ylabel(rmath('Accuracy'))
@@ -1988,7 +1990,6 @@ class CVHelper(object):
         ax.set_ylim(ymin, ymax)
 
         ax.xaxis.set_minor_locator(mpl.ticker.FixedLocator(np.arange(xmin, xmax + 1, 1)))
-        ax.grid(b=False, which='minor')
 
         fig.tight_layout()
 
