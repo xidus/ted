@@ -1988,6 +1988,7 @@ class CVHelper(object):
         ax.set_ylim(ymin, ymax)
 
         ax.xaxis.set_minor_locator(mpl.ticker.FixedLocator(np.arange(xmin, xmax + 1, 1)))
+        ax.grid(b=False, which='minor')
 
         fig.tight_layout()
 
