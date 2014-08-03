@@ -1866,7 +1866,7 @@ class CVHelper(object):
         tkw = dict(fontsize=12, ha='left', va='bottom', bbox=bboxkw)
         fstr1 = r'\sigma = {:.2f} \pm {:.2f}'
         fstr2 = r'\tau = {:.2f} \pm {:.2f}'
-        fstr3 = r'\nu_\text{{\textsc{{train}}}} = {: >2.0f} \pm {: >2.0f}'
+        fstr3 = r'\nu_\mathrm{{\textsc{{train}}}} = {: >2.0f} \pm {: >2.0f}'
         # fstr4 = r'Largest \nu for given quality combo (\nu = {: >2d})'
         # fstr4 = r'Min-max \nu with quality combo (\nu = {: >2d})'
         # fstr5 = r'Max-max \nu with quality combo (\nu = {: >2d})'
