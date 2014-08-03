@@ -1925,7 +1925,7 @@ class CVHelper(object):
             #     ax.fill_between(N_frames, acc[0] + acc[1], acc[0], **fbkw)
             #     ax.fill_between(N_frames, acc[0] - acc[1], acc[0], **fbkw)
 
-            fbkw1 = dict(facecolor='w', alpha=.5)
+            fbkw1 = dict(facecolor='w', alpha=.9)
             fbkw2 = dict(facecolor=colors[0], alpha=.5)
             ax.fill_between(N_frames, acc_test[0] + acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
             ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
