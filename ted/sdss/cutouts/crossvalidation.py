@@ -1937,8 +1937,8 @@ class CVHelper(object):
             Nf_mean = train_acc_max_ices[:, quality_ix].mean()
             Nf_std = train_acc_max_ices[:, quality_ix].std()
             ax.axvline(x=Nf_mean, c='k', label=rmath(fstr3.format(Nf_mean, Nf_std)))
-            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std], x2=[Nf_mean] * 2, c='k', alpha=.5)
-            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std], x2=[Nf_mean] * 2, c='k', alpha=.5)
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std] * 2, x2=[Nf_mean] * 2, c='k', alpha=.5)
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std] * 2, x2=[Nf_mean] * 2, c='k', alpha=.5)
 
             # Better yet, have arrows pointing towards them
             ax.axvline(x=fmin[quality_ix], c='#ff4433', ls='--')
