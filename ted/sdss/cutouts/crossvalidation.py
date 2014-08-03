@@ -1925,20 +1925,21 @@ class CVHelper(object):
             #     ax.fill_between(N_frames, acc[0] + acc[1], acc[0], **fbkw)
             #     ax.fill_between(N_frames, acc[0] - acc[1], acc[0], **fbkw)
 
-            fbkw1 = dict(facecolor='w', alpha=.9)
-            fbkw2 = dict(facecolor=colors[0], alpha=.5)
-            ax.fill_between(N_frames, acc_test[0] + acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
-            ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
-            ax.plot(N_frames, acc_train[0], label=rmath('Train'), c=colors[0], alpha=.8)
-            ax.plot(N_frames, acc_test[0], label=rmath('Test'), c=colors[1], alpha=.8)
-
             # for fold_ix, Nfbest in enumerate(train_acc_max_ices[:, quality_ix]):
             #     ax.axvline(x=Nfbest, c='k')
             Nf_mean = train_acc_max_ices[:, quality_ix].mean()
             Nf_std = train_acc_max_ices[:, quality_ix].std()
             ax.axvline(x=Nf_mean, c='k', label=rmath(fstr3.format(Nf_mean, Nf_std)))
-            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.5)
-            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.5)
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean - Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
+            ax.fill_betweenx(y=[ymin, ymax], x1=[Nf_mean + Nf_std] * 2, x2=[Nf_mean] * 2, facecolor='k', alpha=.3)
+
+            # fbkw1 = dict(facecolor='w', alpha=.9)
+            fbkw1 = dict(facecolor='#f9cbd3', alpha=.8)
+            fbkw2 = dict(facecolor=colors[0], alpha=.5)
+            ax.fill_between(N_frames, acc_test[0] + acc_test[1], acc_test[0] - acc_test[1], **fbkw1)
+            ax.fill_between(N_frames, acc_train[0] + acc_train[1], acc_train[0] - acc_train[1], **fbkw2)
+            ax.plot(N_frames, acc_train[0], label=rmath('Train'), c=colors[0], alpha=.8)
+            ax.plot(N_frames, acc_test[0], label=rmath('Test'), c=colors[1], alpha=.8)
 
             # Better yet, have arrows pointing towards them
             ax.axvline(x=fmin[quality_ix], c='#ff4433', ls='--')
